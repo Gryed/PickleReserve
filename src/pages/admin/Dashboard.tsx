@@ -49,48 +49,48 @@ export default function Dashboard() {
   }
 
   const navItems = [
-    { to: '/admin/courts', label: 'Court Management', desc: 'Add, edit, or remove courts' },
-    { to: '/admin/hours', label: 'Operating Hours', desc: 'Set open/closed times per day' },
-    { to: '/admin/payments', label: 'Payment Settings', desc: 'GCash QR, number, deposit %' },
-    { to: '/admin/payments/pending', label: 'Pending Payments', desc: 'Verify or reject payment proofs' },
+    { to: '/admin/courts', label: 'Court management', desc: 'Add, edit, or remove courts' },
+    { to: '/admin/hours', label: 'Operating hours', desc: 'Set open/closed times per day' },
+    { to: '/admin/payments', label: 'Payment settings', desc: 'GCash QR, number, deposit %' },
+    { to: '/admin/payments/pending', label: 'Pending payments', desc: 'Verify or reject payment proofs' },
     { to: '/admin/reports', label: 'Reports', desc: 'Revenue and booking history' },
   ]
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="p-6 sm:p-8 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <button onClick={signOut} className="text-sm text-red-600 hover:underline">
-          Logout
+        <h1 className="font-display text-2xl font-semibold text-ink">Admin dashboard</h1>
+        <button onClick={signOut} className="text-sm text-ink/60 hover:text-red-700 transition-colors">
+          Log out
         </button>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="border rounded-lg p-4">
-          <p className="text-sm text-gray-500">Total Courts</p>
-          <p className="text-2xl font-bold">{loading ? '—' : stats.totalCourts}</p>
+        <div className="border border-line rounded-lg p-4 bg-white">
+          <p className="text-sm text-ink/50">Total courts</p>
+          <p className="font-display text-2xl font-semibold text-ink">{loading ? '—' : stats.totalCourts}</p>
         </div>
-        <div className="border rounded-lg p-4">
-          <p className="text-sm text-gray-500">Today's Bookings</p>
-          <p className="text-2xl font-bold">{loading ? '—' : stats.todayBookings}</p>
+        <div className="border border-line rounded-lg p-4 bg-white">
+          <p className="text-sm text-ink/50">Today's bookings</p>
+          <p className="font-display text-2xl font-semibold text-ink">{loading ? '—' : stats.todayBookings}</p>
         </div>
-        <div className="border rounded-lg p-4">
-          <p className="text-sm text-gray-500">Pending Payments</p>
-          <p className="text-2xl font-bold text-yellow-600">{loading ? '—' : stats.pendingPayments}</p>
+        <div className="border border-line rounded-lg p-4 bg-white">
+          <p className="text-sm text-ink/50">Pending payments</p>
+          <p className="font-display text-2xl font-semibold text-court-dark">
+            {loading ? '—' : stats.pendingPayments}
+          </p>
         </div>
       </div>
 
-      {/* Navigation */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {navItems.map((item) => (
           <Link
             key={item.to}
             to={item.to}
-            className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+            className="border border-line rounded-lg p-4 bg-white hover:border-court transition-colors"
           >
-            <p className="font-medium">{item.label}</p>
-            <p className="text-sm text-gray-500">{item.desc}</p>
+            <p className="font-medium text-ink">{item.label}</p>
+            <p className="text-sm text-ink/50">{item.desc}</p>
           </Link>
         ))}
       </div>

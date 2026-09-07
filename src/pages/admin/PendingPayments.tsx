@@ -9,6 +9,9 @@ interface PendingReservation {
   payment_type: string
   amount_due: number | null
   payment_proof_url: string | null
+  user_id: string | null
+  guest_name: string | null
+  guest_phone: string | null
   courts: { name: string } | null
 }
 
@@ -72,6 +75,19 @@ export default function PendingPayments() {
               <p className="text-sm text-gray-500">
                 {p.date} · {p.start_time.slice(0, 5)}–{p.end_time.slice(0, 5)}
               </p>
+
+              <div className="text-sm mt-2">
+                {p.user_id ? (
+                  <span className="inline-block bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded">
+                    Registered customer
+                  </span>
+                ) : (
+                  <div className="inline-block bg-orange-50 text-orange-700 text-xs px-2 py-0.5 rounded">
+                    Guest: {p.guest_name} · {p.guest_phone}
+                  </div>
+                )}
+              </div>
+
               <p className="text-sm text-gray-700 mt-1">
                 {p.payment_type === 'deposit' ? 'Deposit' : 'Full payment'}: ₱{p.amount_due ?? '—'}
               </p>

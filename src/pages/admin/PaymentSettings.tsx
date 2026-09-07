@@ -49,10 +49,7 @@ export default function PaymentSettings() {
     setError('')
     try {
       const fileName = `gcash-qr-${Date.now()}.${file.name.split('.').pop()}`
-      const { error: uploadError } = await supabase.storage
-        .from('payment-proofs')
-        .upload(fileName, file)
-
+      const { error: uploadError } = await supabase.storage.from('payment-proofs').upload(fileName, file)
       if (uploadError) throw uploadError
 
       const { data } = supabase.storage.from('payment-proofs').getPublicUrl(fileName)
@@ -81,29 +78,28 @@ export default function PaymentSettings() {
     }
   }
 
-  if (loading) return <div className="p-8">Loading...</div>
-  if (!settings) return <div className="p-8">No settings found.</div>
+  if (loading) return <div className="p-8 max-w-xl mx-auto text-ink/60">Loading...</div>
+  if (!settings) return <div className="p-8 max-w-xl mx-auto text-ink/60">No settings found.</div>
 
   return (
-    <div className="p-8 max-w-xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Payment Settings</h1>
+    <div className="p-6 sm:p-8 max-w-xl mx-auto">
+      <h1 className="font-display text-2xl font-semibold text-ink mb-6">Payment settings</h1>
 
-      {error && <p className="text-red-600 mb-4">{error}</p>}
+      {error && <p className="text-red-700 mb-4">{error}</p>}
 
-      {/* Payment mode toggle */}
-      <div className="bg-gray-50 border rounded-lg p-4 mb-8 flex items-center justify-between">
+      <div className="border border-line rounded-lg p-4 mb-8 bg-white flex items-center justify-between">
         <div>
-          <p className="font-medium">
+          <p className="font-medium text-ink">
             Payment mode: {settings.payment_mode === 'manual' ? 'Manual (screenshot upload)' : 'API (GCash Business)'}
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-ink/50">
             Switch to API mode only once GCash Business/Merchant credentials are configured.
           </p>
         </div>
         <button
           onClick={handleTogglePaymentMode}
           className={`w-12 h-6 rounded-full transition-colors relative shrink-0 ${
-            settings.payment_mode === 'api' ? 'bg-blue-600' : 'bg-gray-300'
+            settings.payment_mode === 'api' ? 'bg-court' : 'bg-line'
           }`}
         >
           <span
@@ -116,34 +112,32 @@ export default function PaymentSettings() {
 
       {settings.payment_mode === 'manual' && (
         <>
-          {/* QR code upload */}
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">GCash QR Code</label>
+            <label className="block text-sm font-medium text-ink/70 mb-2">GCash QR code</label>
             {settings.gcash_qr_url && (
               <img
                 src={settings.gcash_qr_url}
                 alt="GCash QR"
-                className="w-40 h-40 object-contain border rounded mb-2"
+                className="w-40 h-40 object-contain border border-line rounded-lg mb-2"
               />
             )}
             <input type="file" accept="image/*" onChange={handleQrUpload} disabled={uploadingQr} />
-            {uploadingQr && <p className="text-sm text-gray-500">Uploading...</p>}
+            {uploadingQr && <p className="text-sm text-ink/50">Uploading...</p>}
           </div>
 
-          {/* GCash number + deposit % */}
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">GCash Number</label>
+            <label className="block text-sm font-medium text-ink/70 mb-1">GCash number</label>
             <input
               type="text"
               value={gcashNumber}
               onChange={(e) => setGcashNumber(e.target.value)}
               placeholder="09XX XXX XXXX"
-              className="w-full border rounded px-3 py-2"
+              className="w-full border border-line rounded-md px-3 py-2 focus:outline-none focus:border-court"
             />
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-1">Deposit Percentage</label>
+            <label className="block text-sm font-medium text-ink/70 mb-1">Deposit percentage</label>
             <div className="flex items-center gap-2">
               <input
                 type="number"
@@ -151,24 +145,24 @@ export default function PaymentSettings() {
                 max={100}
                 value={depositPercentage}
                 onChange={(e) => setDepositPercentage(Number(e.target.value))}
-                className="w-24 border rounded px-3 py-2"
+                className="w-24 border border-line rounded-md px-3 py-2 focus:outline-none focus:border-court"
               />
-              <span>%</span>
+              <span className="text-ink/60">%</span>
             </div>
           </div>
 
           <button
             onClick={handleSaveDetails}
             disabled={saving}
-            className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+            className="bg-court text-paper px-6 py-2 rounded-md font-medium hover:bg-court-dark transition-colors disabled:opacity-50"
           >
-            {saving ? 'Saving...' : 'Save Details'}
+            {saving ? 'Saving...' : 'Save details'}
           </button>
         </>
       )}
 
       {settings.payment_mode === 'api' && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+        <div className="bg-ball/20 border border-ball/50 rounded-lg p-4 text-sm text-ink/70">
           API mode is not yet connected. This will be wired up once GCash Business/Merchant API credentials are provided.
         </div>
       )}

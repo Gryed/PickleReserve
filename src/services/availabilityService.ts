@@ -43,7 +43,9 @@ export async function getReservationsForCourtAndDate(
 
 export async function createReservation(reservation: {
   court_id: string
-  user_id: string
+  user_id: string | null
+  guest_name?: string | null
+  guest_phone?: string | null
   date: string
   start_time: string
   end_time: string
@@ -65,6 +67,25 @@ export async function cancelReservation(id: string): Promise<void> {
     .eq('id', id)
 
   if (error) throw error
+}
+
+export async function getUserReservations(userId: string): Promise<Reservation[]> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*, courts(name)')
+    .eq('user_id', userId)
+    .order('date', { ascending: false })
+    .order('start_time', { ascending: true })
+
+  if (error) throw error
+  return data as unknown as Reservation[]
+}
+
+export function canCancel(reservation: Reservation): boolean {
+  const bookingDateTime = new Date(`${reservation.date}T${reservation.start_time}`)
+  const now = new Date()
+  const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
+  return reservation.status === 'confirmed' && hoursUntilBooking >= 24
 }
 
 /**

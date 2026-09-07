@@ -21,6 +21,10 @@ export default function Booking() {
   const [paymentType, setPaymentType] = useState<'full' | 'deposit'>('full')
   const [proofFile, setProofFile] = useState<File | null>(null)
 
+  const [bookAsGuest, setBookAsGuest] = useState(!user)
+  const [guestName, setGuestName] = useState('')
+  const [guestPhone, setGuestPhone] = useState('')
+
   const [loading, setLoading] = useState(true)
   const [booking, setBooking] = useState(false)
   const [error, setError] = useState('')
@@ -83,11 +87,17 @@ export default function Booking() {
   }
 
   async function handleBook() {
-    if (!user) {
+    if (!courtId || selectedSlots.length === 0) return
+
+    if (bookAsGuest) {
+      if (!guestName.trim() || !guestPhone.trim()) {
+        setError('Please enter your name and phone number')
+        return
+      }
+    } else if (!user) {
       navigate('/login')
       return
     }
-    if (!courtId || selectedSlots.length === 0) return
 
     setBooking(true)
     setError('')
@@ -98,7 +108,9 @@ export default function Booking() {
         selectedSlots.map((slot) =>
           createReservation({
             court_id: courtId,
-            user_id: user.id,
+            user_id: bookAsGuest ? null : user!.id,
+            guest_name: bookAsGuest ? guestName.trim() : null,
+            guest_phone: bookAsGuest ? guestPhone.trim() : null,
             date,
             start_time: slot.start_time,
             end_time: slot.end_time,
@@ -140,14 +152,17 @@ export default function Booking() {
   }
 
   if (!court) {
-    return <div className="p-8">Loading court...</div>
+    return <div className="p-8 max-w-2xl mx-auto text-ink/60">Loading court...</div>
   }
 
   if (success) {
     return (
       <div className="p-8 max-w-xl mx-auto text-center">
-        <h1 className="text-2xl font-bold text-green-600 mb-2">Booking Submitted!</h1>
-        <p className="text-gray-600">
+        <div className="w-14 h-14 rounded-full bg-ball/30 text-court-dark flex items-center justify-center mx-auto mb-4 text-2xl">
+          ✓
+        </div>
+        <h1 className="font-display text-2xl font-semibold text-ink mb-2">Booking submitted</h1>
+        <p className="text-ink/60">
           Your payment proof has been sent for verification. You'll be notified once confirmed.
         </p>
       </div>
@@ -157,82 +172,84 @@ export default function Booking() {
   if (reservationIds.length > 0) {
     return (
       <div className="p-8 max-w-xl mx-auto">
-        <h1 className="text-2xl font-bold mb-1">Complete Payment</h1>
-        <p className="text-gray-500 mb-6">
+        <h1 className="font-display text-2xl font-semibold text-ink mb-1">Complete payment</h1>
+        <p className="text-ink/60 mb-6">
           Pay ₱{getAmountDue()} via GCash, then upload your payment screenshot below.
         </p>
 
-        {error && <p className="text-red-600 mb-4">{error}</p>}
+        {error && <p className="text-red-700 mb-4">{error}</p>}
 
         {settings?.gcash_qr_url && (
           <img
             src={settings.gcash_qr_url}
             alt="GCash QR"
-            className="w-48 h-48 object-contain border rounded mb-4"
+            className="w-48 h-48 object-contain border border-line rounded-lg mb-4"
           />
         )}
         {settings?.gcash_number && (
-          <p className="mb-6">
+          <p className="mb-6 text-ink">
             GCash Number: <span className="font-medium">{settings.gcash_number}</span>
           </p>
         )}
 
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Upload payment screenshot</label>
+          <label className="block text-sm font-medium text-ink/70 mb-1">Upload payment screenshot</label>
           <input type="file" accept="image/*" onChange={(e) => setProofFile(e.target.files?.[0] ?? null)} />
         </div>
 
         <button
           onClick={handleSubmitProof}
           disabled={!proofFile || booking}
-          className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          className="bg-court text-paper px-6 py-2 rounded-md font-medium hover:bg-court-dark transition-colors disabled:opacity-50"
         >
-          {booking ? 'Submitting...' : 'Submit Payment Proof'}
+          {booking ? 'Submitting...' : 'Submit payment proof'}
         </button>
       </div>
     )
   }
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-1">{court.name}</h1>
-      <p className="text-gray-500 mb-6">₱{court.price_per_hour}/hour</p>
+    <div className="p-6 sm:p-8 max-w-2xl mx-auto">
+      <h1 className="font-display text-2xl font-semibold text-ink mb-1">{court.name}</h1>
+      <p className="text-ink/60 mb-6">₱{court.price_per_hour} / hour</p>
 
-      {error && <p className="text-red-600 mb-4">{error}</p>}
+      {error && <p className="text-red-700 mb-4">{error}</p>}
 
       <div className="mb-6">
-        <label className="block text-sm font-medium mb-1">Select date</label>
+        <label className="block text-sm font-medium text-ink/70 mb-1">Select date</label>
         <input
           type="date"
           value={date}
           min={new Date().toISOString().slice(0, 10)}
           onChange={(e) => setDate(e.target.value)}
-          className="border rounded px-3 py-2"
+          className="border border-line rounded-md px-3 py-2 focus:outline-none focus:border-court"
         />
       </div>
 
-      {loading && <p>Loading available times...</p>}
+      {loading && <p className="text-ink/50">Loading available times...</p>}
 
-      {!loading && slots.length === 0 && <p className="text-gray-500">Closed on this day.</p>}
+      {!loading && slots.length === 0 && (
+        <p className="text-ink/50">Closed on this day.</p>
+      )}
 
       {!loading && slots.length > 0 && (
         <div>
-          <p className="text-sm text-gray-500 mb-2">Select one or more time slots</p>
+          <p className="text-sm text-ink/50 mb-2">Select one or more time slots</p>
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-6">
             {slots.map((slot) => {
               const isSelected = selectedSlots.some((s) => s.start_time === slot.start_time)
               const btnClass = !slot.available
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed line-through'
+                ? 'bg-line/40 text-ink/30 cursor-not-allowed line-through border-line'
                 : isSelected
-                ? 'bg-blue-600 text-white'
-                : 'hover:bg-blue-50'
+                ? 'bg-court text-paper border-court'
+                : 'border-line hover:border-court text-ink'
 
               return (
                 <button
                   key={slot.start_time}
                   disabled={!slot.available}
                   onClick={() => toggleSlot(slot)}
-                  className={'border rounded px-3 py-2 text-sm ' + btnClass}
+                  className={'border rounded-md px-3 py-2 text-sm transition-colors ' + btnClass}
                 >
                   {slot.start_time.slice(0, 5)}
                 </button>
@@ -244,18 +261,64 @@ export default function Booking() {
 
       {selectedSlots.length > 0 && (
         <div>
-          <div className="mb-4 text-sm text-gray-700">
-            {selectedSlots.length} slot(s) selected · Total: ₱{getTotalPrice()}
+          <div className="mb-4 text-sm text-ink/70">
+            {selectedSlots.length} slot(s) selected · Total:{' '}
+            <span className="font-semibold text-ink">₱{getTotalPrice()}</span>
           </div>
 
+          {user && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-ink/70 mb-2">Book as</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setBookAsGuest(false)}
+                  className={
+                    'border rounded-md px-4 py-2 text-sm transition-colors ' +
+                    (!bookAsGuest ? 'bg-court text-paper border-court' : 'border-line text-ink hover:border-court')
+                  }
+                >
+                  My account
+                </button>
+                <button
+                  onClick={() => setBookAsGuest(true)}
+                  className={
+                    'border rounded-md px-4 py-2 text-sm transition-colors ' +
+                    (bookAsGuest ? 'bg-court text-paper border-court' : 'border-line text-ink hover:border-court')
+                  }
+                >
+                  Guest
+                </button>
+              </div>
+            </div>
+          )}
+
+          {bookAsGuest && (
+            <div className="mb-4 space-y-2">
+              <input
+                type="text"
+                placeholder="Full name"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                className="w-full border border-line rounded-md px-3 py-2 focus:outline-none focus:border-court"
+              />
+              <input
+                type="tel"
+                placeholder="Phone number"
+                value={guestPhone}
+                onChange={(e) => setGuestPhone(e.target.value)}
+                className="w-full border border-line rounded-md px-3 py-2 focus:outline-none focus:border-court"
+              />
+            </div>
+          )}
+
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">Payment option</label>
-            <div className="flex gap-3">
+            <label className="block text-sm font-medium text-ink/70 mb-2">Payment option</label>
+            <div className="flex gap-2">
               <button
                 onClick={() => setPaymentType('full')}
                 className={
-                  'border rounded px-4 py-2 text-sm ' +
-                  (paymentType === 'full' ? 'bg-blue-600 text-white' : '')
+                  'border rounded-md px-4 py-2 text-sm transition-colors ' +
+                  (paymentType === 'full' ? 'bg-court text-paper border-court' : 'border-line text-ink hover:border-court')
                 }
               >
                 Full payment (₱{getTotalPrice()})
@@ -263,8 +326,8 @@ export default function Booking() {
               <button
                 onClick={() => setPaymentType('deposit')}
                 className={
-                  'border rounded px-4 py-2 text-sm ' +
-                  (paymentType === 'deposit' ? 'bg-blue-600 text-white' : '')
+                  'border rounded-md px-4 py-2 text-sm transition-colors ' +
+                  (paymentType === 'deposit' ? 'bg-court text-paper border-court' : 'border-line text-ink hover:border-court')
                 }
               >
                 Deposit ({settings?.deposit_percentage ?? 50}% — ₱
@@ -276,9 +339,9 @@ export default function Booking() {
           <button
             onClick={handleBook}
             disabled={booking}
-            className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+            className="bg-court text-paper px-6 py-2 rounded-md font-medium hover:bg-court-dark transition-colors disabled:opacity-50"
           >
-            {booking ? 'Processing...' : user ? `Confirm ${selectedSlots.length} slot(s)` : 'Login to book'}
+            {booking ? 'Processing...' : `Confirm ${selectedSlots.length} slot(s)`}
           </button>
         </div>
       )}
