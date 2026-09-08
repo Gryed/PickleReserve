@@ -1,8 +1,8 @@
 import { supabase } from '../lib/supabase'
 
-export async function uploadPaymentProof(file: File, reservationId: string): Promise<string> {
+export async function uploadPaymentProof(file: File, idPrefix: string): Promise<string> {
   const fileExt = file.name.split('.').pop()
-  const fileName = `${reservationId}-${Date.now()}.${fileExt}`
+  const fileName = `${idPrefix}-${Date.now()}.${fileExt}`
 
   const { error: uploadError } = await supabase.storage
     .from('payment-proofs')

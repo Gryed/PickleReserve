@@ -54,6 +54,7 @@ export default function Dashboard() {
     { to: '/admin/payments', label: 'Payment settings', desc: 'GCash QR, number, deposit %' },
     { to: '/admin/payments/pending', label: 'Pending payments', desc: 'Verify or reject payment proofs' },
     { to: '/admin/reports', label: 'Reports', desc: 'Revenue and booking history' },
+  { to: '/admin/reservations', label: 'Reservations', desc: 'View all bookings and status' },
   ]
 
   return (

@@ -12,6 +12,7 @@ import OperatingHoursPage from './pages/admin/OperatingHours'
 import PaymentSettings from './pages/admin/PaymentSettings'
 import PendingPayments from './pages/admin/PendingPayments'
 import Reports from './pages/admin/Reports'
+import Reservations from './pages/admin/Reservations'
 
 function App() {
   return (
@@ -68,6 +69,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Reports />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/reservations"
+          element={
+            <ProtectedRoute>
+              <Reservations />
             </ProtectedRoute>
           }
         />

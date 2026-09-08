@@ -49,10 +49,13 @@ export async function createReservation(reservation: {
   date: string
   start_time: string
   end_time: string
+  payment_type: 'full' | 'deposit'
+  amount_due: number
+  payment_proof_url: string
 }): Promise<Reservation> {
   const { data, error } = await supabase
     .from('reservations')
-    .insert({ ...reservation, status: 'confirmed' })
+    .insert({ ...reservation, status: 'confirmed', payment_status: 'pending' })
     .select()
     .single()
 
@@ -81,6 +84,17 @@ export async function getUserReservations(userId: string): Promise<Reservation[]
   return data as unknown as Reservation[]
 }
 
+export async function getAllReservationsAdmin() {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*, courts(name)')
+    .order('date', { ascending: false })
+    .order('start_time', { ascending: true })
+
+  if (error) throw error
+  return data
+}
+
 export function canCancel(reservation: Reservation): boolean {
   const bookingDateTime = new Date(`${reservation.date}T${reservation.start_time}`)
   const now = new Date()
@@ -88,56 +102,38 @@ export function canCancel(reservation: Reservation): boolean {
   return reservation.status === 'confirmed' && hoursUntilBooking >= 24
 }
 
-/**
- * Generates all possible 1-hour time slots for a given day, marking
- * which ones are already booked.
- */
 export function generateTimeSlots(
   openTime: string,
   closeTime: string,
   existingReservations: Reservation[]
 ): TimeSlot[] {
   const slots: TimeSlot[] = []
-
   const [openHour] = openTime.split(':').map(Number)
   const [closeHour] = closeTime.split(':').map(Number)
 
   for (let hour = openHour; hour < closeHour; hour++) {
     const start = `${String(hour).padStart(2, '0')}:00:00`
     const end = `${String(hour + 1).padStart(2, '0')}:00:00`
+    const match = existingReservations.find((r) => r.start_time === start)
 
-    const isBooked = existingReservations.some(
-      (r) => r.start_time === start
-    )
+    let bookedByName: string | undefined
+    if (match && match.payment_status === 'verified') {
+      bookedByName = match.guest_name ?? 'Member'
+    }
 
-    slots.push({
-      start_time: start,
-      end_time: end,
-      available: !isBooked,
-    })
+    slots.push({ start_time: start, end_time: end, available: !match, bookedByName })
   }
 
   return slots
 }
 
-/**
- * Gets available time slots for a specific court on a specific date,
- * accounting for operating hours and existing reservations.
- */
-export async function getAvailableSlots(
-  courtId: string,
-  date: string
-): Promise<TimeSlot[]> {
+export async function getAvailableSlots(courtId: string, date: string): Promise<TimeSlot[]> {
   const dayOfWeek = new Date(date).getDay()
-
   const hours = await getOperatingHours()
   const dayHours = hours.find((h) => h.day_of_week === dayOfWeek)
 
-  if (!dayHours || dayHours.is_closed) {
-    return []
-  }
+  if (!dayHours || dayHours.is_closed) return []
 
   const reservations = await getReservationsForCourtAndDate(courtId, date)
-
   return generateTimeSlots(dayHours.open_time, dayHours.close_time, reservations)
 }

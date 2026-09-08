@@ -4,8 +4,7 @@ import type { Court, Settings } from '../types/court'
 import type { TimeSlot } from '../types/availability'
 import { getCourts, getSettings } from '../services/courtService'
 import { getAvailableSlots, createReservation } from '../services/availabilityService'
-import { uploadPaymentProof, updateReservationPaymentProof } from '../services/paymentService'
-import { supabase } from '../lib/supabase'
+import { uploadPaymentProof } from '../services/paymentService'
 import { useAuth } from '../context/AuthContext'
 
 const WEEKDAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
@@ -46,6 +45,8 @@ function formatDateLong(iso: string) {
   return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 }
 
+type ModalStep = 'none' | 'rules' | 'payment' | 'success'
+
 export default function Booking() {
   const { courtId } = useParams<{ courtId: string }>()
   const navigate = useNavigate()
@@ -59,7 +60,6 @@ export default function Booking() {
   const [slotFilter, setSlotFilter] = useState<'all' | 'available' | 'booked'>('all')
   const [paymentType, setPaymentType] = useState<'full' | 'deposit'>('full')
   const [proofFile, setProofFile] = useState<File | null>(null)
-  const [showRulesModal, setShowRulesModal] = useState(false)
   const [agreedToRules, setAgreedToRules] = useState(false)
 
   const [bookAsGuest, setBookAsGuest] = useState(!user)
@@ -67,10 +67,9 @@ export default function Booking() {
   const [guestPhone, setGuestPhone] = useState('')
 
   const [loading, setLoading] = useState(true)
-  const [booking, setBooking] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
-  const [reservationIds, setReservationIds] = useState<string[]>([])
+  const [modalStep, setModalStep] = useState<ModalStep>('none')
 
   const dateOptions = nextDays(14)
 
@@ -112,9 +111,7 @@ export default function Booking() {
   function toggleSlot(slot: TimeSlot) {
     setSelectedSlots((prev) => {
       const exists = prev.find((s) => s.start_time === slot.start_time)
-      if (exists) {
-        return prev.filter((s) => s.start_time !== slot.start_time)
-      }
+      if (exists) return prev.filter((s) => s.start_time !== slot.start_time)
       return [...prev, slot].sort((a, b) => a.start_time.localeCompare(b.start_time))
     })
   }
@@ -146,18 +143,25 @@ export default function Booking() {
       return
     }
     setError('')
-    setShowRulesModal(true)
+    setModalStep('rules')
   }
 
-  async function handleBook() {
-    if (!courtId || selectedSlots.length === 0 || !agreedToRules) return
+  function proceedToPayment() {
+    if (!agreedToRules) return
+    setModalStep('payment')
+  }
 
-    setBooking(true)
+  async function handleSubmitBooking() {
+    if (!courtId || selectedSlots.length === 0 || !proofFile) return
+
+    setSubmitting(true)
     setError('')
     try {
       const amountPerSlot = getAmountDue() / selectedSlots.length
+      const idPrefix = crypto.randomUUID()
+      const proofUrl = await uploadPaymentProof(proofFile, idPrefix)
 
-      const reservations = await Promise.all(
+      await Promise.all(
         selectedSlots.map((slot) =>
           createReservation({
             court_id: courtId,
@@ -167,124 +171,32 @@ export default function Booking() {
             date,
             start_time: slot.start_time,
             end_time: slot.end_time,
+            payment_type: paymentType,
+            amount_due: amountPerSlot,
+            payment_proof_url: proofUrl,
           })
         )
       )
 
-      await Promise.all(
-        reservations.map((r) =>
-          supabase
-            .from('reservations')
-            .update({ payment_type: paymentType, amount_due: amountPerSlot })
-            .eq('id', r.id)
-        )
-      )
-
-      setReservationIds(reservations.map((r) => r.id))
-      setShowRulesModal(false)
-      setBooking(false)
+      setModalStep('success')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to book')
-      setBooking(false)
+      setError(err instanceof Error ? err.message : 'Failed to submit booking')
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  async function handleSubmitProof() {
-    if (reservationIds.length === 0 || !proofFile) return
-
-    setBooking(true)
-    setError('')
-    try {
-      const url = await uploadPaymentProof(proofFile, reservationIds[0])
-      await Promise.all(reservationIds.map((id) => updateReservationPaymentProof(id, url)))
-      setSuccess(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit payment proof')
-    } finally {
-      setBooking(false)
+  function closeModals() {
+    setModalStep('none')
+    setProofFile(null)
+    if (modalStep === 'success') {
+      setSelectedSlots([])
+      loadSlots()
     }
   }
 
   if (!court) {
     return <div className="p-8 max-w-2xl mx-auto text-muted">Loading court...</div>
-  }
-
-  if (success) {
-    return (
-      <div className="p-8 max-w-xl mx-auto text-center">
-        <div className="w-14 h-14 rounded-full bg-court/15 text-court flex items-center justify-center mx-auto mb-4 text-2xl">
-          ✓
-        </div>
-        <h1 className="font-display text-2xl font-semibold text-ink mb-2">Booking submitted</h1>
-        <p className="text-muted">
-          Your payment proof has been sent for verification. You'll be notified once confirmed.
-        </p>
-      </div>
-    )
-  }
-
-  if (reservationIds.length > 0) {
-    return (
-      <div className="p-8 max-w-xl mx-auto">
-        <h1 className="font-display text-2xl font-semibold text-ink mb-1">Complete payment</h1>
-        <p className="text-muted mb-6">
-          Pay ₱{getAmountDue()} via GCash, then upload your payment screenshot below.
-        </p>
-
-        {error && <p className="text-red-400 mb-4">{error}</p>}
-
-        {settings?.gcash_qr_url && (
-          <img
-            src={settings.gcash_qr_url}
-            alt="GCash QR"
-            className="w-48 h-48 object-contain border border-line rounded-lg mb-4 bg-white"
-          />
-        )}
-        {(settings?.gcash_number || settings?.gcash_name) && (
-          <div className="mb-6 text-ink space-y-1">
-            {settings.gcash_name && (
-              <p>
-                Account name: <span className="font-medium">{settings.gcash_name}</span>
-              </p>
-            )}
-            {settings.gcash_number && (
-              <p>
-                GCash number: <span className="font-medium">{settings.gcash_number}</span>
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-muted mb-2">Upload payment screenshot</label>
-          <label className="flex items-center justify-center gap-2 border border-dashed border-line rounded-lg px-4 py-6 cursor-pointer hover:border-court transition-colors bg-surface">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
-              className="hidden"
-            />
-            <span className="text-sm text-muted text-center">
-              {proofFile ? (
-                <span className="text-ink font-medium">{proofFile.name}</span>
-              ) : (
-                <>
-                  <span className="text-court font-medium">Tap to upload</span> a screenshot
-                </>
-              )}
-            </span>
-          </label>
-        </div>
-
-        <button
-          onClick={handleSubmitProof}
-          disabled={!proofFile || booking}
-          className="btn-court px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
-        >
-          {booking ? 'Submitting...' : 'Submit payment proof'}
-        </button>
-      </div>
-    )
   }
 
   const availableCount = slots.filter((s) => s.available).length
@@ -301,7 +213,7 @@ export default function Booking() {
       <h1 className="font-display text-2xl font-semibold text-ink mb-1">{court.name}</h1>
       <p className="text-muted mb-6">₱{court.price_per_hour} / hour</p>
 
-      {error && <p className="text-red-400 mb-4">{error}</p>}
+      {error && modalStep === 'none' && <p className="text-red-400 mb-4">{error}</p>}
 
       {/* Date strip */}
       <div className="mb-6">
@@ -344,12 +256,10 @@ export default function Booking() {
       </div>
 
       {loading && <p className="text-muted">Loading available times...</p>}
-
       {!loading && slots.length === 0 && <p className="text-muted">Closed on this day.</p>}
 
       {!loading && slots.length > 0 && (
         <div>
-          {/* Legend + filter */}
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <div className="flex items-center gap-4 text-xs text-muted">
               <span className="flex items-center gap-1.5">
@@ -377,7 +287,7 @@ export default function Booking() {
                   (slotFilter === 'available' ? 'btn-court border-court' : 'border-line text-muted hover:border-court')
                 }
               >
-                Available ({availableCount})
+                Available only ({availableCount})
               </button>
               <button
                 onClick={() => setSlotFilter('booked')}
@@ -386,7 +296,7 @@ export default function Booking() {
                   (slotFilter === 'booked' ? 'btn-court border-court' : 'border-line text-muted hover:border-court')
                 }
               >
-                Booked ({bookedCount})
+                Booked only ({bookedCount})
               </button>
             </div>
           </div>
@@ -401,15 +311,18 @@ export default function Booking() {
                 : 'border-line hover:border-court text-ink'
 
               return (
-                <button
-                  key={slot.start_time}
-                  disabled={!slot.available}
-                  onClick={() => toggleSlot(slot)}
-                  className={'border rounded-md px-2 py-2 text-xs sm:text-sm transition-colors ' + btnClass}
-                >
-                  {formatTime(slot.start_time)} – {formatTime(slot.end_time)}
-                </button>
-              )
+                  <button
+                    key={slot.start_time}
+                    disabled={!slot.available}
+                    onClick={() => toggleSlot(slot)}
+                    className={'border rounded-md px-2 py-2 text-xs sm:text-sm transition-colors flex flex-col items-center gap-0.5 ' + btnClass}
+                  >
+                    <span>
+                      {formatTime(slot.start_time)} – {formatTime(slot.end_time)}
+                    </span>
+                    {slot.bookedByName && <span className="text-[10px] opacity-70">{slot.bookedByName}</span>}
+                  </button>
+                )
             })}
           </div>
         </div>
@@ -417,7 +330,6 @@ export default function Booking() {
 
       {selectedSlots.length > 0 && (
         <div>
-          {/* Booking summary card */}
           <div className="border border-line rounded-lg p-4 bg-surface mb-6">
             <p className="font-display font-semibold text-ink mb-3">Booking summary</p>
 
@@ -530,17 +442,14 @@ export default function Booking() {
             </div>
           </div>
 
-          <button
-            onClick={openRulesModal}
-            className="btn-court px-6 py-2 rounded-md font-medium transition-colors"
-          >
+          <button onClick={openRulesModal} className="btn-court px-6 py-2 rounded-md font-medium transition-colors">
             Confirm {selectedSlots.length} slot(s)
           </button>
         </div>
       )}
 
-      {/* Booking rules modal */}
-      {showRulesModal && (
+      {/* Rules modal */}
+      {modalStep === 'rules' && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
           <div className="bg-surface border border-line rounded-lg max-w-md w-full max-h-[85vh] overflow-y-auto">
             <div className="p-6 border-b border-line">
@@ -565,24 +474,117 @@ export default function Booking() {
                 I have read and agree to the booking rules.
               </label>
 
-              {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowRulesModal(false)}
+                  onClick={() => setModalStep('none')}
                   className="flex-1 border border-line text-ink px-4 py-2 rounded-md font-medium hover:border-court transition-colors"
                 >
                   Back
                 </button>
                 <button
-                  onClick={handleBook}
-                  disabled={!agreedToRules || booking}
+                  onClick={proceedToPayment}
+                  disabled={!agreedToRules}
                   className="flex-1 btn-court px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-40"
                 >
-                  {booking ? 'Processing...' : 'Continue to payment'}
+                  Continue to payment
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment modal */}
+      {modalStep === 'payment' && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+          <div className="bg-surface border border-line rounded-lg max-w-md w-full max-h-[85vh] overflow-y-auto">
+            <div className="p-6 border-b border-line">
+              <h2 className="font-display text-xl font-semibold text-ink">Complete payment</h2>
+              <p className="text-sm text-muted mt-1">
+                Pay ₱{getAmountDue()} via GCash, then upload your payment screenshot.
+              </p>
+            </div>
+
+            <div className="p-6">
+              {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+
+              {settings?.gcash_qr_url && (
+                <img
+                  src={settings.gcash_qr_url}
+                  alt="GCash QR"
+                  className="w-40 h-40 object-contain border border-line rounded-lg mb-4 bg-white mx-auto"
+                />
+              )}
+              {(settings?.gcash_number || settings?.gcash_name) && (
+                <div className="mb-4 text-sm text-ink space-y-1">
+                  {settings.gcash_name && (
+                    <p>
+                      Account name: <span className="font-medium">{settings.gcash_name}</span>
+                    </p>
+                  )}
+                  {settings.gcash_number && (
+                    <p>
+                      GCash number: <span className="font-medium">{settings.gcash_number}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-muted mb-2">Upload payment screenshot</label>
+                <label className="flex items-center justify-center gap-2 border border-dashed border-line rounded-lg px-4 py-6 cursor-pointer hover:border-court transition-colors bg-paper">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                  <span className="text-sm text-muted text-center">
+                    {proofFile ? (
+                      <span className="text-ink font-medium">{proofFile.name}</span>
+                    ) : (
+                      <>
+                        <span className="text-court font-medium">Tap to upload</span> a screenshot
+                      </>
+                    )}
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setModalStep('rules')}
+                  className="flex-1 border border-line text-ink px-4 py-2 rounded-md font-medium hover:border-court transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleSubmitBooking}
+                  disabled={!proofFile || submitting}
+                  className="flex-1 btn-court px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-40"
+                >
+                  {submitting ? 'Submitting...' : 'Confirm booking'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success modal */}
+      {modalStep === 'success' && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+          <div className="bg-surface border border-line rounded-lg max-w-sm w-full p-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-court/15 text-court flex items-center justify-center mx-auto mb-4 text-2xl">
+              ✓
+            </div>
+            <h2 className="font-display text-xl font-semibold text-ink mb-2">Booking submitted</h2>
+            <p className="text-sm text-muted mb-6">
+              Your payment proof has been sent for verification. You'll be notified once confirmed.
+            </p>
+            <button onClick={closeModals} className="btn-court px-6 py-2 rounded-md font-medium transition-colors w-full">
+              Done
+            </button>
           </div>
         </div>
       )}
