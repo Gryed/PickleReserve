@@ -2,12 +2,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
 @theme {
-  --color-court: #2F6F5E;
-  --color-court-dark: #24564A;
-  --color-ball: #D6E24B;
-  --color-ink: #16211D;
-  --color-paper: #F7F8F5;
-  --color-line: #DCE3D5;
+  --color-court: #CFFF33;
+  --color-court-dark: #9FCC1A;
+  --color-ink: #F7F9F5;
+  --color-paper: #0A0E0C;
+  --color-surface: #1A2420;
+  --color-line: #34433C;
+  --color-muted: #93A69B;
 
   --font-display: "Space Grotesk", sans-serif;
   --font-body: "Inter", sans-serif;
@@ -21,4 +22,12 @@ body {
 
 h1, h2, h3, .font-display {
   font-family: var(--font-display);
+}
+
+.btn-court {
+  background: linear-gradient(135deg, #CFFF33 0%, #4ADE80 100%);
+  color: var(--color-paper);
+}
+.btn-court:hover {
+  background: linear-gradient(135deg, #9FCC1A 0%, #22C55E 100%);
 }

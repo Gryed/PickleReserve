@@ -11,6 +11,7 @@ export default function PaymentSettings() {
   const [uploadingQr, setUploadingQr] = useState(false)
 
   const [gcashNumber, setGcashNumber] = useState('')
+  const [gcashName, setGcashName] = useState('')
   const [depositPercentage, setDepositPercentage] = useState(50)
 
   useEffect(() => {
@@ -22,6 +23,7 @@ export default function PaymentSettings() {
       const data = await getSettings()
       setSettings(data)
       setGcashNumber(data.gcash_number ?? '')
+      setGcashName(data.gcash_name ?? '')
       setDepositPercentage(data.deposit_percentage ?? 50)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load settings')
@@ -68,6 +70,7 @@ export default function PaymentSettings() {
     try {
       const updated = await updateSettings({
         gcash_number: gcashNumber,
+        gcash_name: gcashName,
         deposit_percentage: depositPercentage,
       })
       setSettings(updated)
@@ -126,6 +129,17 @@ export default function PaymentSettings() {
           </div>
 
           <div className="mb-4">
+            <label className="block text-sm font-medium text-ink/70 mb-1">GCash account name</label>
+            <input
+              type="text"
+              value={gcashName}
+              onChange={(e) => setGcashName(e.target.value)}
+              placeholder="e.g. Juan D."
+              className="w-full border border-line rounded-md px-3 py-2 focus:outline-none focus:border-court"
+            />
+          </div>
+
+          <div className="mb-4">
             <label className="block text-sm font-medium text-ink/70 mb-1">GCash number</label>
             <input
               type="text"
@@ -154,7 +168,7 @@ export default function PaymentSettings() {
           <button
             onClick={handleSaveDetails}
             disabled={saving}
-            className="bg-court text-paper px-6 py-2 rounded-md font-medium hover:bg-court-dark transition-colors disabled:opacity-50"
+            className="btn-court px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save details'}
           </button>
@@ -162,7 +176,7 @@ export default function PaymentSettings() {
       )}
 
       {settings.payment_mode === 'api' && (
-        <div className="bg-ball/20 border border-ball/50 rounded-lg p-4 text-sm text-ink/70">
+        <div className="bg-court/10 border border-court/30 rounded-lg p-4 text-sm text-ink/70">
           API mode is not yet connected. This will be wired up once GCash Business/Merchant API credentials are provided.
         </div>
       )}

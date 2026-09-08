@@ -14,28 +14,25 @@ export default function Navbar() {
     <nav className="border-b border-line bg-paper">
       <div className="max-w-4xl mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
         <Link to="/" className="font-display font-semibold text-lg text-ink tracking-tight">
-          PickleReserve
+          Pickle<span className="text-court">Reserve</span>
         </Link>
 
         <div className="flex items-center gap-5 text-sm">
           {user ? (
             <>
-              <Link to="/my-bookings" className="text-ink/70 hover:text-court transition-colors">
+              <Link to="/my-bookings" className="text-muted hover:text-court transition-colors">
                 My bookings
               </Link>
-              <button onClick={handleLogout} className="text-ink/70 hover:text-court transition-colors">
+              <button onClick={handleLogout} className="text-muted hover:text-court transition-colors">
                 Log out
               </button>
             </>
           ) : (
             <>
-              <Link to="/login" className="text-ink/70 hover:text-court transition-colors">
+              <Link to="/login" className="text-muted hover:text-court transition-colors">
                 Log in
               </Link>
-              <Link
-                to="/signup"
-                className="bg-court text-paper px-4 py-2 rounded-md font-medium hover:bg-court-dark transition-colors"
-              >
+              <Link to="/signup" className="btn-court px-4 py-2 rounded-md font-medium transition-colors">
                 Sign up
               </Link>
             </>

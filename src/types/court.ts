@@ -13,5 +13,6 @@ export interface Settings {
   payment_mode: 'manual' | 'api'
   gcash_qr_url: string | null
   gcash_number: string | null
+  gcash_name: string | null
   deposit_percentage: number
 }
