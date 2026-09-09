@@ -3,7 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import type { Court, Settings } from '../types/court'
 import type { TimeSlot } from '../types/availability'
 import { getCourts, getSettings } from '../services/courtService'
-import { getAvailableSlots, createReservation } from '../services/availabilityService'
+import {
+  getAvailableSlots,
+  createReservation,
+  generateBookingReference,
+} from '../services/availabilityService'
 import { uploadPaymentProof } from '../services/paymentService'
 import { useAuth } from '../context/AuthContext'
 
@@ -45,6 +49,48 @@ function formatDateLong(iso: string) {
   return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 }
 
+interface SlotGroup {
+  start: string
+  end: string
+  hours: number
+  isSeparate: boolean
+}
+
+function groupConsecutiveSlots(slots: TimeSlot[]): SlotGroup[] {
+  if (slots.length === 0) return []
+
+  const sorted = [...slots].sort((a, b) => a.start_time.localeCompare(b.start_time))
+  const groups: SlotGroup[] = []
+  let currentGroup: TimeSlot[] = [sorted[0]]
+
+  for (let i = 1; i < sorted.length; i++) {
+    const prevEnd = currentGroup[currentGroup.length - 1].end_time
+    if (sorted[i].start_time === prevEnd) {
+      currentGroup.push(sorted[i])
+    } else {
+      groups.push({
+        start: currentGroup[0].start_time,
+        end: currentGroup[currentGroup.length - 1].end_time,
+        hours: currentGroup.length,
+        isSeparate: false,
+      })
+      currentGroup = [sorted[i]]
+    }
+  }
+  groups.push({
+    start: currentGroup[0].start_time,
+    end: currentGroup[currentGroup.length - 1].end_time,
+    hours: currentGroup.length,
+    isSeparate: false,
+  })
+
+  if (groups.length > 1) {
+    groups.forEach((g) => (g.isSeparate = true))
+  }
+
+  return groups
+}
+
 type ModalStep = 'none' | 'rules' | 'payment' | 'success'
 
 export default function Booking() {
@@ -70,8 +116,9 @@ export default function Booking() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [modalStep, setModalStep] = useState<ModalStep>('none')
+  const [bookingReference, setBookingReference] = useState('')
 
-  const dateOptions = nextDays(14)
+  const dateOptions = nextDays(settings?.booking_horizon_days ?? 60)
 
   useEffect(() => {
     loadCourtAndSettings()
@@ -160,6 +207,7 @@ export default function Booking() {
       const amountPerSlot = getAmountDue() / selectedSlots.length
       const idPrefix = crypto.randomUUID()
       const proofUrl = await uploadPaymentProof(proofFile, idPrefix)
+      const reference = await generateBookingReference()
 
       await Promise.all(
         selectedSlots.map((slot) =>
@@ -174,10 +222,12 @@ export default function Booking() {
             payment_type: paymentType,
             amount_due: amountPerSlot,
             payment_proof_url: proofUrl,
+            booking_reference: reference,
           })
         )
       )
 
+      setBookingReference(reference)
       setModalStep('success')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit booking')
@@ -189,24 +239,24 @@ export default function Booking() {
   function closeModals() {
     setModalStep('none')
     setProofFile(null)
-    if (modalStep === 'success') {
-      setSelectedSlots([])
-      loadSlots()
-    }
+    setBookingReference('')
+    setSelectedSlots([])
+    loadSlots()
   }
 
   if (!court) {
     return <div className="p-8 max-w-2xl mx-auto text-muted">Loading court...</div>
   }
 
-  const availableCount = slots.filter((s) => s.available).length
-  const bookedCount = slots.filter((s) => !s.available).length
   const displayedSlots =
     slotFilter === 'available'
       ? slots.filter((s) => s.available)
       : slotFilter === 'booked'
       ? slots.filter((s) => !s.available)
       : slots
+
+  const availableCount = slots.filter((s) => s.available).length
+  const bookedCount = slots.filter((s) => !s.available).length
 
   return (
     <div className="p-6 sm:p-8 max-w-2xl mx-auto relative">
@@ -260,16 +310,7 @@ export default function Booking() {
 
       {!loading && slots.length > 0 && (
         <div>
-          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <div className="flex items-center gap-4 text-xs text-muted">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-court inline-block" /> Available ({availableCount})
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Booked ({bookedCount})
-              </span>
-            </div>
-
+          <div className="flex justify-end mb-3">
             <div className="flex gap-2 text-xs">
               <button
                 onClick={() => setSlotFilter('all')}
@@ -301,77 +342,56 @@ export default function Booking() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
             {displayedSlots.map((slot) => {
               const isSelected = selectedSlots.some((s) => s.start_time === slot.start_time)
               const btnClass = !slot.available
-                  ? 'bg-red-950/40 text-red-400/60 cursor-not-allowed border-red-900/50'
-                  : isSelected
-                  ? 'btn-court border-court'
-                  : 'border-line hover:border-court text-ink'
+                ? 'bg-red-950/30 text-red-400 border-transparent'
+                : isSelected
+                ? 'btn-court border-transparent'
+                : 'bg-surface border-transparent hover:border hover:border-court text-ink'
 
               return (
-                  <button
-                    key={slot.start_time}
-                    disabled={!slot.available}
-                    onClick={() => toggleSlot(slot)}
-                    className={'border rounded-md px-2 py-2 text-xs sm:text-sm transition-colors flex flex-col items-center gap-0.5 ' + btnClass}
-                  >
-                    <span className={!slot.available ? 'line-through' : ''}>
-                      {formatTime(slot.start_time)} – {formatTime(slot.end_time)}
+                <button
+                  key={slot.start_time}
+                  disabled={!slot.available}
+                  onClick={() => toggleSlot(slot)}
+                  className={
+                    'border rounded-lg px-3 py-3 text-sm transition-colors flex flex-col items-center justify-center gap-1 min-h-[64px] ' +
+                    btnClass
+                  }
+                >
+                  <span className={'font-medium ' + (!slot.available ? 'line-through' : '')}>
+                    {formatTime(slot.start_time)} – {formatTime(slot.end_time)}
+                  </span>
+                  {slot.bookedByName ? (
+                    <span className="text-[10px] opacity-90 no-underline truncate max-w-full">
+                      {slot.bookedByName}
                     </span>
-                    {slot.bookedByName && <span className="text-[10px] opacity-90 no-underline">{slot.bookedByName}</span>}
-                  </button>
-                )
+                  ) : (
+                    <span className="text-xs opacity-70">₱{court.price_per_hour}</span>
+                  )}
+                </button>
+              )
             })}
+          </div>
+
+          <div className="flex items-center gap-4 text-xs text-muted mb-6 flex-wrap">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-surface border border-line inline-block" /> Available
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-court inline-block" /> Selected
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Booked
+            </span>
           </div>
         </div>
       )}
 
       {selectedSlots.length > 0 && (
-        <div>
-          <div className="border border-line rounded-lg p-4 bg-surface mb-6">
-            <p className="font-display font-semibold text-ink mb-3">Booking summary</p>
-
-            <div className="space-y-1.5 text-sm mb-4">
-              <div className="flex justify-between">
-                <span className="text-muted">Date</span>
-                <span className="text-ink font-medium">{formatDateLong(date)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">Court</span>
-                <span className="text-ink font-medium">{court.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">Total hours</span>
-                <span className="text-court font-medium">{selectedSlots.length}h</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">Rate</span>
-                <span className="text-ink font-medium">₱{court.price_per_hour}/hr</span>
-              </div>
-              <div className="flex justify-between border-t border-line pt-1.5 mt-1.5">
-                <span className="text-muted">Total payment</span>
-                <span className="text-court font-semibold">₱{getTotalPrice()}</span>
-              </div>
-            </div>
-
-            <p className="text-xs text-muted mb-2">Selected slots ({selectedSlots.length})</p>
-            <div className="flex flex-wrap gap-2">
-              {selectedSlots.map((s) => (
-                <span
-                  key={s.start_time}
-                  className="flex items-center gap-2 border border-court/50 text-court text-xs px-3 py-1.5 rounded-full"
-                >
-                  {formatTime(s.start_time)} – {formatTime(s.end_time)}
-                  <button onClick={() => removeSlot(s.start_time)} className="hover:text-red-400">
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-          </div>
-
+        <div className="pb-24">
           {user && (
             <div className="mb-4">
               <label className="block text-sm font-medium text-muted mb-2">Book as</label>
@@ -417,7 +437,7 @@ export default function Booking() {
             </div>
           )}
 
-          <div className="mb-6">
+          <div className="mb-4">
             <label className="block text-sm font-medium text-muted mb-2">Payment option</label>
             <div className="flex gap-2">
               <button
@@ -442,9 +462,47 @@ export default function Booking() {
             </div>
           </div>
 
-          <button onClick={openRulesModal} className="btn-court px-6 py-2 rounded-md font-medium transition-colors">
-            Confirm {selectedSlots.length} slot(s)
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {selectedSlots.map((s) => (
+              <span
+                key={s.start_time}
+                className="flex items-center gap-2 border border-court/50 text-court text-xs px-3 py-1.5 rounded-full"
+              >
+                {formatTime(s.start_time)} – {formatTime(s.end_time)}
+                <button onClick={() => removeSlot(s.start_time)} className="hover:text-red-400">
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sticky bottom booking bar */}
+      {selectedSlots.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-line z-40">
+          <div className="max-w-2xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs text-muted uppercase tracking-wide truncate">{court.name}</p>
+              <p className="text-sm text-ink font-medium truncate">
+                {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {' · '}
+                {groupConsecutiveSlots(selectedSlots)
+                  .map((g) => `${formatTime(g.start)}-${formatTime(g.end)}`)
+                  .join(', ')}
+              </p>
+              <p className="text-xs text-muted">
+                {selectedSlots.length} {groupConsecutiveSlots(selectedSlots).length > 1 ? 'separate ' : ''}hr
+                {selectedSlots.length > 1 ? 's' : ''} · ₱{getTotalPrice()}
+              </p>
+            </div>
+            <button
+              onClick={openRulesModal}
+              className="btn-court px-5 py-2.5 rounded-md font-medium transition-colors shrink-0 whitespace-nowrap"
+            >
+              Book Now →
+            </button>
+          </div>
         </div>
       )}
 
@@ -579,9 +637,16 @@ export default function Booking() {
               ✓
             </div>
             <h2 className="font-display text-xl font-semibold text-ink mb-2">Booking submitted</h2>
-            <p className="text-sm text-muted mb-6">
+            <p className="text-sm text-muted mb-1">
               Your payment proof has been sent for verification. You'll be notified once confirmed.
             </p>
+
+            <div className="bg-paper border border-line rounded-lg py-3 px-4 my-4">
+              <p className="text-xs text-muted mb-1">Booking reference</p>
+              <p className="font-display text-lg font-semibold text-court tracking-wide">{bookingReference}</p>
+            </div>
+            <p className="text-xs text-muted mb-6">Save this reference to look up your booking later.</p>
+
             <button onClick={closeModals} className="btn-court px-6 py-2 rounded-md font-medium transition-colors w-full">
               Done
             </button>

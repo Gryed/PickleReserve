@@ -52,6 +52,7 @@ export async function createReservation(reservation: {
   payment_type: 'full' | 'deposit'
   amount_due: number
   payment_proof_url: string
+  booking_reference: string
 }): Promise<Reservation> {
   const { data, error } = await supabase
     .from('reservations')
@@ -139,6 +140,24 @@ export async function getGuestReservationsByPhone(phone: string): Promise<Reserv
     .from('reservations')
     .select('*, courts(name)')
     .eq('guest_phone', phone.trim())
+    .order('date', { ascending: false })
+    .order('start_time', { ascending: true })
+
+  if (error) throw error
+  return data as unknown as Reservation[]
+}
+
+export async function generateBookingReference(): Promise<string> {
+  const { data, error } = await supabase.rpc('generate_booking_reference')
+  if (error) throw error
+  return data as string
+}
+
+export async function getReservationsByReference(reference: string): Promise<Reservation[]> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*, courts(name)')
+    .eq('booking_reference', reference.trim().toUpperCase())
     .order('date', { ascending: false })
     .order('start_time', { ascending: true })
 

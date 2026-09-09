@@ -12,14 +12,15 @@ export interface Reservation {
   user_id: string | null
   guest_name: string | null
   guest_phone: string | null
-  date: string // "2026-09-07"
-  start_time: string // "09:00:00"
-  end_time: string // "10:00:00"
+  date: string
+  start_time: string
+  end_time: string
   status: 'confirmed' | 'cancelled'
   payment_type: 'full' | 'deposit'
   amount_due: number | null
   payment_status: 'pending' | 'verified' | 'rejected'
   payment_proof_url: string | null
+  booking_reference: string | null
   created_at: string
 }
 

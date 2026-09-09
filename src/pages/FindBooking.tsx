@@ -1,13 +1,19 @@
 import { useState } from 'react'
 import type { Reservation } from '../types/availability'
-import { getGuestReservationsByPhone, cancelReservation, canCancel } from '../services/availabilityService'
+import {
+  getGuestReservationsByPhone,
+  getReservationsByReference,
+  cancelReservation,
+  canCancel,
+} from '../services/availabilityService'
 
 interface BookingWithCourt extends Reservation {
   courts: { name: string } | null
 }
 
 export default function FindBooking() {
-  const [phone, setPhone] = useState('')
+  const [searchMode, setSearchMode] = useState<'phone' | 'reference'>('reference')
+  const [query, setQuery] = useState('')
   const [bookings, setBookings] = useState<BookingWithCourt[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -15,12 +21,15 @@ export default function FindBooking() {
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
-    if (!phone.trim()) return
+    if (!query.trim()) return
 
     setLoading(true)
     setError('')
     try {
-      const data = await getGuestReservationsByPhone(phone)
+      const data =
+        searchMode === 'reference'
+          ? await getReservationsByReference(query)
+          : await getGuestReservationsByPhone(query)
       setBookings(data as BookingWithCourt[])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to search')
@@ -29,14 +38,21 @@ export default function FindBooking() {
     }
   }
 
+  async function refreshResults() {
+    const data =
+      searchMode === 'reference'
+        ? await getReservationsByReference(query)
+        : await getGuestReservationsByPhone(query)
+    setBookings(data as BookingWithCourt[])
+  }
+
   async function handleCancel(id: string) {
     if (!confirm('Cancel this booking?')) return
     setCancellingId(id)
     setError('')
     try {
       await cancelReservation(id)
-      const data = await getGuestReservationsByPhone(phone)
-      setBookings(data as BookingWithCourt[])
+      await refreshResults()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel')
     } finally {
@@ -60,14 +76,43 @@ export default function FindBooking() {
   return (
     <div className="p-6 sm:p-8 max-w-2xl mx-auto">
       <h1 className="font-display text-2xl font-semibold text-ink mb-1">Find my booking</h1>
-      <p className="text-muted mb-6">Booked as a guest? Enter your phone number to view your bookings.</p>
+      <p className="text-muted mb-6">Search using your booking reference or phone number.</p>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => {
+            setSearchMode('reference')
+            setBookings(null)
+            setQuery('')
+          }}
+          className={
+            'px-4 py-1.5 rounded-full border text-sm transition-colors ' +
+            (searchMode === 'reference' ? 'btn-court border-court' : 'border-line text-muted hover:border-court')
+          }
+        >
+          Booking reference
+        </button>
+        <button
+          onClick={() => {
+            setSearchMode('phone')
+            setBookings(null)
+            setQuery('')
+          }}
+          className={
+            'px-4 py-1.5 rounded-full border text-sm transition-colors ' +
+            (searchMode === 'phone' ? 'btn-court border-court' : 'border-line text-muted hover:border-court')
+          }
+        >
+          Phone number
+        </button>
+      </div>
 
       <form onSubmit={handleSearch} className="flex gap-2 mb-6">
         <input
-          type="tel"
-          placeholder="Phone number"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          type={searchMode === 'phone' ? 'tel' : 'text'}
+          placeholder={searchMode === 'reference' ? 'e.g. PR-2026-00002' : 'Phone number'}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
           className="flex-1 bg-surface border border-line rounded-md px-3 py-2 text-ink focus:outline-none focus:border-court"
           required
         />
@@ -84,7 +129,7 @@ export default function FindBooking() {
 
       {bookings !== null && bookings.length === 0 && (
         <div className="border border-line rounded-lg p-8 text-center text-muted">
-          No bookings found for this phone number.
+          No bookings found.
         </div>
       )}
 
@@ -96,6 +141,9 @@ export default function FindBooking() {
               <div key={b.id} className="border border-line rounded-lg p-4 bg-surface">
                 <div className="flex items-start justify-between gap-3">
                   <div>
+                    {b.booking_reference && (
+                      <p className="text-xs text-court font-medium mb-1">{b.booking_reference}</p>
+                    )}
                     <p className="font-medium text-ink">{b.courts?.name ?? 'Court'}</p>
                     <p className="text-sm text-muted">
                       {b.date} · {b.start_time.slice(0, 5)}–{b.end_time.slice(0, 5)}

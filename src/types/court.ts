@@ -15,4 +15,5 @@ export interface Settings {
   gcash_number: string | null
   gcash_name: string | null
   deposit_percentage: number
+  booking_horizon_days: number
 }
