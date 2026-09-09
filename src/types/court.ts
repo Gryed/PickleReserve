@@ -3,7 +3,7 @@ export interface Court {
   name: string
   type: string | null
   price_per_hour: number
-  status: 'available' | 'maintenance'
+  status: 'available' | 'maintenance' | 'not_available'
   created_at: string
 }
 

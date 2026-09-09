@@ -19,13 +19,13 @@ import Reports from './pages/admin/Reports'
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<><Navbar /><Home /></>} />
-        <Route path="/booking/:courtId" element={<><Navbar /><Booking /></>} />
-        <Route path="/my-bookings" element={<><Navbar /><MyBookings /></>} />
-        <Route path="/find-booking" element={<><Navbar /><FindBooking /></>} />
-        <Route path="/login" element={<><Navbar /><Login /></>} />
-        <Route path="/signup" element={<><Navbar /><Signup /></>} />
+        <Routes>
+          <Route path="/" element={<><Navbar /><Home /></>} />
+          <Route path="/booking" element={<><Navbar /><Booking /></>} />
+          <Route path="/my-bookings" element={<><Navbar /><MyBookings /></>} />
+          <Route path="/find-booking" element={<><Navbar /><FindBooking /></>} />
+          <Route path="/login" element={<><Navbar /><Login /></>} />
+          <Route path="/signup" element={<><Navbar /><Signup /></>} />
         <Route
           path="/admin"
           element={
