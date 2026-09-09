@@ -1,8 +1,10 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
+import AdminLayout from './components/AdminLayout'
 import Home from './pages/Home'
 import Booking from './pages/Booking'
 import MyBookings from './pages/MyBookings'
+import FindBooking from './pages/FindBooking'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -11,24 +13,26 @@ import CourtManagement from './pages/admin/CourtManagement'
 import OperatingHoursPage from './pages/admin/OperatingHours'
 import PaymentSettings from './pages/admin/PaymentSettings'
 import PendingPayments from './pages/admin/PendingPayments'
-import Reports from './pages/admin/Reports'
 import Reservations from './pages/admin/Reservations'
+import Reports from './pages/admin/Reports'
 
 function App() {
   return (
     <BrowserRouter>
-      <Navbar />
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/booking/:courtId" element={<Booking />} />
-        <Route path="/my-bookings" element={<MyBookings />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/" element={<><Navbar /><Home /></>} />
+        <Route path="/booking/:courtId" element={<><Navbar /><Booking /></>} />
+        <Route path="/my-bookings" element={<><Navbar /><MyBookings /></>} />
+        <Route path="/find-booking" element={<><Navbar /><FindBooking /></>} />
+        <Route path="/login" element={<><Navbar /><Login /></>} />
+        <Route path="/signup" element={<><Navbar /><Signup /></>} />
         <Route
           path="/admin"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <AdminLayout>
+                <Dashboard />
+              </AdminLayout>
             </ProtectedRoute>
           }
         />
@@ -36,7 +40,9 @@ function App() {
           path="/admin/courts"
           element={
             <ProtectedRoute>
-              <CourtManagement />
+              <AdminLayout>
+                <CourtManagement />
+              </AdminLayout>
             </ProtectedRoute>
           }
         />
@@ -44,7 +50,9 @@ function App() {
           path="/admin/hours"
           element={
             <ProtectedRoute>
-              <OperatingHoursPage />
+              <AdminLayout>
+                <OperatingHoursPage />
+              </AdminLayout>
             </ProtectedRoute>
           }
         />
@@ -52,7 +60,9 @@ function App() {
           path="/admin/payments"
           element={
             <ProtectedRoute>
-              <PaymentSettings />
+              <AdminLayout>
+                <PaymentSettings />
+              </AdminLayout>
             </ProtectedRoute>
           }
         />
@@ -60,15 +70,9 @@ function App() {
           path="/admin/payments/pending"
           element={
             <ProtectedRoute>
-              <PendingPayments />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/reports"
-          element={
-            <ProtectedRoute>
-              <Reports />
+              <AdminLayout>
+                <PendingPayments />
+              </AdminLayout>
             </ProtectedRoute>
           }
         />
@@ -76,7 +80,19 @@ function App() {
           path="/admin/reservations"
           element={
             <ProtectedRoute>
-              <Reservations />
+              <AdminLayout>
+                <Reservations />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/reports"
+          element={
+            <ProtectedRoute>
+              <AdminLayout>
+                <Reports />
+              </AdminLayout>
             </ProtectedRoute>
           }
         />

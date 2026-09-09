@@ -305,10 +305,10 @@ export default function Booking() {
             {displayedSlots.map((slot) => {
               const isSelected = selectedSlots.some((s) => s.start_time === slot.start_time)
               const btnClass = !slot.available
-                ? 'bg-red-950/40 text-red-400/60 cursor-not-allowed line-through border-red-900/50'
-                : isSelected
-                ? 'btn-court border-court'
-                : 'border-line hover:border-court text-ink'
+                  ? 'bg-red-950/40 text-red-400/60 cursor-not-allowed border-red-900/50'
+                  : isSelected
+                  ? 'btn-court border-court'
+                  : 'border-line hover:border-court text-ink'
 
               return (
                   <button
@@ -317,10 +317,10 @@ export default function Booking() {
                     onClick={() => toggleSlot(slot)}
                     className={'border rounded-md px-2 py-2 text-xs sm:text-sm transition-colors flex flex-col items-center gap-0.5 ' + btnClass}
                   >
-                    <span>
+                    <span className={!slot.available ? 'line-through' : ''}>
                       {formatTime(slot.start_time)} – {formatTime(slot.end_time)}
                     </span>
-                    {slot.bookedByName && <span className="text-[10px] opacity-70">{slot.bookedByName}</span>}
+                    {slot.bookedByName && <span className="text-[10px] opacity-90 no-underline">{slot.bookedByName}</span>}
                   </button>
                 )
             })}

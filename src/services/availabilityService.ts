@@ -116,10 +116,7 @@ export function generateTimeSlots(
     const end = `${String(hour + 1).padStart(2, '0')}:00:00`
     const match = existingReservations.find((r) => r.start_time === start)
 
-    let bookedByName: string | undefined
-    if (match && match.payment_status === 'verified') {
-      bookedByName = match.guest_name ?? 'Member'
-    }
+    const bookedByName = match ? match.guest_name ?? 'Member' : undefined
 
     slots.push({ start_time: start, end_time: end, available: !match, bookedByName })
   }
@@ -136,4 +133,15 @@ export async function getAvailableSlots(courtId: string, date: string): Promise<
 
   const reservations = await getReservationsForCourtAndDate(courtId, date)
   return generateTimeSlots(dayHours.open_time, dayHours.close_time, reservations)
+}
+export async function getGuestReservationsByPhone(phone: string): Promise<Reservation[]> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*, courts(name)')
+    .eq('guest_phone', phone.trim())
+    .order('date', { ascending: false })
+    .order('start_time', { ascending: true })
+
+  if (error) throw error
+  return data as unknown as Reservation[]
 }

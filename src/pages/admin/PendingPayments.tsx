@@ -64,12 +64,14 @@ export default function PendingPayments() {
         {payments.map((p) => (
           <div key={p.id} className="border rounded-lg p-4 flex flex-col sm:flex-row gap-4">
             {p.payment_proof_url && (
+            <a href={p.payment_proof_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
               <img
                 src={p.payment_proof_url}
-                alt="Payment proof"
-                className="w-32 h-32 object-cover border rounded shrink-0"
+                alt="Payment proof — click to view full size"
+                className="w-32 h-32 object-cover border border-line rounded-lg hover:opacity-80 transition-opacity cursor-zoom-in"
               />
-            )}
+            </a>
+          )}
             <div className="flex-1">
               <p className="font-medium">{p.courts?.name ?? 'Court'}</p>
               <p className="text-sm text-gray-500">

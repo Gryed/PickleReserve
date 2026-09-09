@@ -54,27 +54,27 @@ export default function MyBookings() {
 
   function statusBadge(b: BookingWithCourt) {
     if (b.status === 'cancelled') {
-      return <span className="text-xs px-2 py-1 rounded-full bg-ink/10 text-ink/50 shrink-0">Cancelled</span>
+      return <span className="text-xs px-2 py-1 rounded-full bg-line text-muted shrink-0">Cancelled</span>
     }
     if (b.payment_status === 'verified') {
-      return <span className="text-xs px-2 py-1 rounded-full bg-ball/30 text-court-dark shrink-0">Verified</span>
+      return <span className="text-xs px-2 py-1 rounded-full bg-court/15 text-court shrink-0">Verified</span>
     }
     if (b.payment_status === 'rejected') {
-      return <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 shrink-0">Rejected</span>
+      return <span className="text-xs px-2 py-1 rounded-full bg-red-950/40 text-red-400 shrink-0">Rejected</span>
     }
-    return <span className="text-xs px-2 py-1 rounded-full bg-line text-ink/60 shrink-0">Pending</span>
+    return <span className="text-xs px-2 py-1 rounded-full bg-line text-muted shrink-0">Pending</span>
   }
 
-  if (authLoading || loading) return <div className="p-8 max-w-2xl mx-auto text-ink/60">Loading...</div>
+  if (authLoading || loading) return <div className="p-8 max-w-2xl mx-auto text-muted">Loading...</div>
 
   return (
     <div className="p-6 sm:p-8 max-w-2xl mx-auto">
       <h1 className="font-display text-2xl font-semibold text-ink mb-6">My bookings</h1>
 
-      {error && <p className="text-red-700 mb-4">{error}</p>}
+      {error && <p className="text-red-400 mb-4">{error}</p>}
 
       {bookings.length === 0 && (
-        <div className="border border-line rounded-lg p-8 text-center text-ink/50">
+        <div className="border border-line rounded-lg p-8 text-center text-muted">
           No bookings yet.
         </div>
       )}
@@ -83,14 +83,14 @@ export default function MyBookings() {
         {bookings.map((b) => {
           const canBeCancelled = canCancel(b)
           return (
-            <div key={b.id} className="border border-line rounded-lg p-4 bg-white">
+            <div key={b.id} className="border border-line rounded-lg p-4 bg-surface">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-medium text-ink">{b.courts?.name ?? 'Court'}</p>
-                  <p className="text-sm text-ink/50">
+                  <p className="text-sm text-muted">
                     {b.date} · {b.start_time.slice(0, 5)}–{b.end_time.slice(0, 5)}
                   </p>
-                  <p className="text-sm text-ink/70 mt-1">
+                  <p className="text-sm text-muted mt-1">
                     {b.payment_type === 'deposit' ? 'Deposit' : 'Full payment'}:{' '}
                     <span className="font-medium text-ink">₱{b.amount_due ?? '—'}</span>
                   </p>
@@ -104,12 +104,12 @@ export default function MyBookings() {
                     <button
                       onClick={() => handleCancel(b.id)}
                       disabled={cancellingId === b.id}
-                      className="text-sm text-red-700 hover:underline disabled:opacity-50"
+                      className="text-sm text-red-400 hover:underline disabled:opacity-50"
                     >
                       {cancellingId === b.id ? 'Cancelling...' : 'Cancel booking'}
                     </button>
                   ) : (
-                    <p className="text-xs text-ink/40">
+                    <p className="text-xs text-muted/70">
                       Cancellation window has passed (24hrs). Contact admin for changes.
                     </p>
                   )}

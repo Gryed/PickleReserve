@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Navbar() {
-  const { user, signOut } = useAuth()
+  const { user, username, signOut } = useAuth()
   const navigate = useNavigate()
 
   async function handleLogout() {
@@ -20,8 +20,12 @@ export default function Navbar() {
         <div className="flex items-center gap-5 text-sm">
           {user ? (
             <>
+              <span className="text-ink hidden sm:inline">Hi! {username ?? 'there'}</span>
               <Link to="/my-bookings" className="text-muted hover:text-court transition-colors">
                 My bookings
+              </Link>
+              <Link to="/find-booking" className="text-muted hover:text-court transition-colors">
+                Find booking
               </Link>
               <button onClick={handleLogout} className="text-muted hover:text-court transition-colors">
                 Log out
@@ -29,6 +33,9 @@ export default function Navbar() {
             </>
           ) : (
             <>
+              <Link to="/find-booking" className="text-muted hover:text-court transition-colors">
+                Find booking
+              </Link>
               <Link to="/login" className="text-muted hover:text-court transition-colors">
                 Log in
               </Link>
