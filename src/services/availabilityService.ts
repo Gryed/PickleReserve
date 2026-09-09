@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabase'
-import type { OperatingHours, Reservation, TimeSlot } from '../types/availability'
+import type {
+  OperatingHours,
+  Reservation,
+  TimeSlot,
+} from '../types/availability'
 
 export async function getOperatingHours(): Promise<OperatingHours[]> {
   const { data, error } = await supabase
@@ -8,12 +12,18 @@ export async function getOperatingHours(): Promise<OperatingHours[]> {
     .order('day_of_week', { ascending: true })
 
   if (error) throw error
+
   return data as OperatingHours[]
 }
 
 export async function updateOperatingHours(
   dayOfWeek: number,
-  updates: Partial<Pick<OperatingHours, 'open_time' | 'close_time' | 'is_closed'>>
+  updates: Partial<
+    Pick<
+      OperatingHours,
+      'open_time' | 'close_time' | 'is_closed'
+    >
+  >
 ): Promise<OperatingHours> {
   const { data, error } = await supabase
     .from('operating_hours')
@@ -23,6 +33,7 @@ export async function updateOperatingHours(
     .single()
 
   if (error) throw error
+
   return data as OperatingHours
 }
 
@@ -38,6 +49,7 @@ export async function getReservationsForCourtAndDate(
     .eq('status', 'confirmed')
 
   if (error) throw error
+
   return data as Reservation[]
 }
 
@@ -56,32 +68,48 @@ export async function createReservation(reservation: {
 }): Promise<Reservation> {
   const { data, error } = await supabase
     .from('reservations')
-    .insert({ ...reservation, status: 'confirmed', payment_status: 'pending' })
+    .insert({
+      ...reservation,
+      status: 'confirmed',
+      payment_status: 'pending',
+    })
     .select()
     .single()
 
   if (error) throw error
+
   return data as Reservation
 }
 
-export async function cancelReservation(id: string): Promise<void> {
+export async function cancelReservation(
+  id: string
+): Promise<void> {
   const { error } = await supabase
     .from('reservations')
-    .update({ status: 'cancelled' })
+    .update({
+      status: 'cancelled',
+    })
     .eq('id', id)
 
   if (error) throw error
 }
 
-export async function getUserReservations(userId: string): Promise<Reservation[]> {
+export async function getUserReservations(
+  userId: string
+): Promise<Reservation[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select('*, courts(name)')
     .eq('user_id', userId)
-    .order('date', { ascending: false })
-    .order('start_time', { ascending: true })
+    .order('date', {
+      ascending: false,
+    })
+    .order('start_time', {
+      ascending: true,
+    })
 
   if (error) throw error
+
   return data as unknown as Reservation[]
 }
 
@@ -89,18 +117,35 @@ export async function getAllReservationsAdmin() {
   const { data, error } = await supabase
     .from('reservations')
     .select('*, courts(name)')
-    .order('date', { ascending: false })
-    .order('start_time', { ascending: true })
+    .order('date', {
+      ascending: false,
+    })
+    .order('start_time', {
+      ascending: true,
+    })
 
   if (error) throw error
+
   return data
 }
 
-export function canCancel(reservation: Reservation): boolean {
-  const bookingDateTime = new Date(`${reservation.date}T${reservation.start_time}`)
+export function canCancel(
+  reservation: Reservation
+): boolean {
+  const bookingDateTime = new Date(
+    `${reservation.date}T${reservation.start_time}`
+  )
+
   const now = new Date()
-  const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
-  return reservation.status === 'confirmed' && hoursUntilBooking >= 24
+
+  const hoursUntilBooking =
+    (bookingDateTime.getTime() - now.getTime()) /
+    (1000 * 60 * 60)
+
+  return (
+    reservation.status === 'confirmed' &&
+    hoursUntilBooking >= 24
+  )
 }
 
 export function generateTimeSlots(
@@ -109,58 +154,157 @@ export function generateTimeSlots(
   existingReservations: Reservation[]
 ): TimeSlot[] {
   const slots: TimeSlot[] = []
-  const [openHour] = openTime.split(':').map(Number)
-  const [closeHour] = closeTime.split(':').map(Number)
 
-  for (let hour = openHour; hour < closeHour; hour++) {
-    const start = `${String(hour).padStart(2, '0')}:00:00`
-    const end = `${String(hour + 1).padStart(2, '0')}:00:00`
-    const match = existingReservations.find((r) => r.start_time === start)
+  const [openHour] = openTime
+    .split(':')
+    .map(Number)
 
-    const bookedByName = match ? match.guest_name ?? 'Member' : undefined
+  const [closeHour] = closeTime
+    .split(':')
+    .map(Number)
 
-    slots.push({ start_time: start, end_time: end, available: !match, bookedByName })
+  for (
+    let hour = openHour;
+    hour < closeHour;
+    hour++
+  ) {
+    const start = `${String(hour).padStart(
+      2,
+      '0'
+    )}:00:00`
+
+    const end = `${String(hour + 1).padStart(
+      2,
+      '0'
+    )}:00:00`
+
+    const match = existingReservations.find(
+      (reservation) =>
+        reservation.start_time === start
+    )
+
+    const bookedByName = match
+      ? match.guest_name ?? 'Member'
+      : undefined
+
+    slots.push({
+      start_time: start,
+      end_time: end,
+      available: !match,
+      bookedByName,
+    })
   }
 
   return slots
 }
 
-export async function getAvailableSlots(courtId: string, date: string): Promise<TimeSlot[]> {
-  const dayOfWeek = new Date(date).getDay()
+export async function getAvailableSlots(
+  courtId: string,
+  date: string
+): Promise<TimeSlot[]> {
+  /*
+   * IMPORTANT:
+   * Parse YYYY-MM-DD manually.
+   * This avoids timezone problems caused by
+   * new Date('YYYY-MM-DD').getDay().
+   */
+
+  const [year, month, day] = date
+    .split('-')
+    .map(Number)
+
+  const localDate = new Date(
+    year,
+    month - 1,
+    day
+  )
+
+  const dayOfWeek = localDate.getDay()
+
   const hours = await getOperatingHours()
-  const dayHours = hours.find((h) => h.day_of_week === dayOfWeek)
 
-  if (!dayHours || dayHours.is_closed) return []
+  const dayHours = hours.find(
+    (item) =>
+      Number(item.day_of_week) === dayOfWeek
+  )
 
-  const reservations = await getReservationsForCourtAndDate(courtId, date)
-  return generateTimeSlots(dayHours.open_time, dayHours.close_time, reservations)
+  if (!dayHours) {
+    console.warn(
+      'No operating hours found for day:',
+      {
+        date,
+        dayOfWeek,
+        hours,
+      }
+    )
+
+    return []
+  }
+
+  if (dayHours.is_closed) {
+    return []
+  }
+
+  const reservations =
+    await getReservationsForCourtAndDate(
+      courtId,
+      date
+    )
+
+  return generateTimeSlots(
+    dayHours.open_time,
+    dayHours.close_time,
+    reservations
+  )
 }
-export async function getGuestReservationsByPhone(phone: string): Promise<Reservation[]> {
+
+export async function getGuestReservationsByPhone(
+  phone: string
+): Promise<Reservation[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select('*, courts(name)')
     .eq('guest_phone', phone.trim())
-    .order('date', { ascending: false })
-    .order('start_time', { ascending: true })
+    .order('date', {
+      ascending: false,
+    })
+    .order('start_time', {
+      ascending: true,
+    })
 
   if (error) throw error
+
   return data as unknown as Reservation[]
 }
 
 export async function generateBookingReference(): Promise<string> {
-  const { data, error } = await supabase.rpc('generate_booking_reference')
+  const { data, error } = await supabase.rpc(
+    'generate_booking_reference'
+  )
+
   if (error) throw error
+
   return data as string
 }
 
-export async function getReservationsByReference(reference: string): Promise<Reservation[]> {
+export async function getReservationsByReference(
+  reference: string
+): Promise<Reservation[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select('*, courts(name)')
-    .eq('booking_reference', reference.trim().toUpperCase())
-    .order('date', { ascending: false })
-    .order('start_time', { ascending: true })
+    .eq(
+      'booking_reference',
+      reference.trim().toUpperCase()
+    )
+    .order('date', {
+      ascending: false,
+    })
+    .order('start_time', {
+      ascending: true,
+    })
 
   if (error) throw error
+
   return data as unknown as Reservation[]
 }
