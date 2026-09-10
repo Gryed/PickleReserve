@@ -8,6 +8,8 @@ export interface Court {
   weekend_pricing_enabled: boolean
   weekend_price_per_hour: number | null
 
+  is_24_hours: boolean
+
   status:
     | 'available'
     | 'maintenance'

@@ -64,6 +64,7 @@ export default function CourtManagement() {
         // Weekend pricing defaults to OFF
         weekend_pricing_enabled: false,
         weekend_price_per_hour: null,
+        is_24_hours: false,
       })
 
       setName('')

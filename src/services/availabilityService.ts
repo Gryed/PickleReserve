@@ -177,6 +177,7 @@ export function canCancel(
  * 06:00:00
  * 12:00:00
  * 18:30:00
+ * 24:00:00
  *
  * into minutes from midnight.
  */
@@ -229,12 +230,7 @@ function minutesToTime(
 /**
  * Generates 1-hour booking slots.
  *
- * IMPORTANT:
- *
- * If close_time is 00:00 and open_time is 06:00,
- * 00:00 is treated as MIDNIGHT / NEXT DAY.
- *
- * Example:
+ * Normal example:
  *
  * 06:00 -> 00:00
  *
@@ -246,11 +242,17 @@ function minutesToTime(
  * 22:00 - 23:00
  * 23:00 - 24:00
  *
- * This fixes the previous issue where:
+ * 24-hour example:
  *
- * for (let hour = 6; hour < 0; hour++)
+ * 00:00 -> 24:00
  *
- * produced ZERO slots.
+ * produces exactly 24 slots:
+ *
+ * 00:00 - 01:00
+ * 01:00 - 02:00
+ * ...
+ * 22:00 - 23:00
+ * 23:00 - 24:00
  */
 export function generateTimeSlots(
   openTime: string,
@@ -275,9 +277,15 @@ export function generateTimeSlots(
    *
    * Since close is earlier than open,
    * the closing time belongs to the next day.
+   *
+   * IMPORTANT:
+   *
+   * 00:00 -> 24:00 is already a full-day range,
+   * so closeMinutes must remain 1440.
    */
   if (
-    closeMinutes <= openMinutes
+    closeMinutes <= openMinutes &&
+    closeMinutes !== 24 * 60
   ) {
     closeMinutes += 24 * 60
   }
@@ -297,13 +305,14 @@ export function generateTimeSlots(
      * Don't create a partial slot.
      *
      * Example:
-     * 23:00 -> 00:00 is valid.
      *
-     * But if a future setting is:
      * 06:00 -> 23:30
      *
-     * we stop at 23:00 because
-     * 23:00 -> 00:00 would exceed
+     * stops at:
+     *
+     * 22:00 -> 23:00
+     *
+     * because 23:00 -> 00:00 would exceed
      * the configured closing time.
      */
     if (
@@ -316,12 +325,6 @@ export function generateTimeSlots(
     /*
      * Keep 24:00 internally for the final
      * midnight slot.
-     *
-     * This allows the UI grouping logic to
-     * understand:
-     *
-     * 22:00 -> 23:00
-     * 23:00 -> 24:00
      */
     const start =
       minutesToTime(
@@ -409,6 +412,100 @@ export async function getAvailableSlots(
   const dayOfWeek =
     localDate.getDay()
 
+  /* =======================================================
+     GET COURT SETTINGS
+  ======================================================= */
+
+  /*
+   * We only need is_24_hours here.
+   *
+   * Existing courts default to false, so their
+   * current Operating Hours behavior remains unchanged.
+   */
+  const {
+    data: court,
+    error: courtError,
+  } = await supabase
+    .from('courts')
+    .select('id, name, is_24_hours')
+    .eq('id', courtId)
+    .single()
+
+  if (courtError) {
+    throw courtError
+  }
+
+  /*
+   * Get reservations first.
+   *
+   * Both normal courts and 24-hour courts need
+   * the same reservation blocking logic.
+   */
+  const reservations =
+    await getReservationsForCourtAndDate(
+      courtId,
+      date
+    )
+
+  /* =======================================================
+     24 HOURS OPERATIONS
+  ======================================================= */
+
+  /*
+   * IMPORTANT:
+   *
+   * If this court is configured as 24 hours,
+   * completely bypass the normal Operating Hours
+   * table.
+   *
+   * This means:
+   *
+   * is_24_hours = true
+   *       ↓
+   * 00:00 - 24:00
+   *       ↓
+   * 24 one-hour slots
+   *
+   * Weekend availability is NOT changed for courts
+   * where is_24_hours is false.
+   */
+  if (court?.is_24_hours === true) {
+    console.log(
+      '[PickleReserve] 24-hour court availability:',
+      {
+        date,
+        dayOfWeek,
+        courtId,
+        courtName: court.name,
+        is24Hours: true,
+        totalSlots: 24,
+      }
+    )
+
+    return generateTimeSlots(
+      '00:00:00',
+      '24:00:00',
+      reservations
+    )
+  }
+
+  /* =======================================================
+     NORMAL OPERATING HOURS
+  ======================================================= */
+
+  /*
+   * If 24 Hours Operations is OFF,
+   * use the existing Operating Hours configuration.
+   *
+   * This preserves the current schedule exactly.
+   *
+   * Example:
+   *
+   * Saturday -> 18 slots
+   * Sunday   -> 6 slots
+   *
+   * Nothing here changes those values.
+   */
   const hours =
     await getOperatingHours()
 
@@ -418,6 +515,7 @@ export async function getAvailableSlots(
       date,
       dayOfWeek,
       courtId,
+      is24Hours: false,
       operatingHours: hours,
     }
   )
@@ -478,12 +576,9 @@ export async function getAvailableSlots(
     return []
   }
 
-  const reservations =
-    await getReservationsForCourtAndDate(
-      courtId,
-      date
-    )
-
+  /*
+   * Use the existing schedule exactly as configured.
+   */
   return generateTimeSlots(
     dayHours.open_time,
     dayHours.close_time,

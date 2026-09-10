@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Court, Settings } from '../types/court'
@@ -31,6 +30,7 @@ function toISODate(d: Date) {
 function addDays(date: Date, days: number) {
   const result = new Date(date)
   result.setDate(result.getDate() + days)
+
   return result
 }
 
@@ -124,11 +124,69 @@ function groupConsecutiveSlots(slots: TimeSlot[]): SlotGroup[] {
   return groups
 }
 
+type BookingDuration = '1' | '6' | 'full'
+
 type ModalStep =
   | 'none'
   | 'rules'
   | 'payment'
   | 'success'
+
+function getSlotIndex(
+  slots: TimeSlot[],
+  startTime: string
+) {
+  return slots.findIndex(
+    (slot) =>
+      slot.start_time === startTime
+  )
+}
+
+function getConsecutiveAvailableSlots(
+  slots: TimeSlot[],
+  startIndex: number,
+  requiredHours: number
+): TimeSlot[] {
+  if (
+    startIndex < 0 ||
+    requiredHours <= 0
+  ) {
+    return []
+  }
+
+  const result: TimeSlot[] = []
+
+  for (
+    let index = startIndex;
+    index < slots.length &&
+    result.length < requiredHours;
+    index++
+  ) {
+    const slot = slots[index]
+
+    if (!slot.available) {
+      return []
+    }
+
+    if (
+      result.length > 0 &&
+      result[result.length - 1].end_time !==
+        slot.start_time
+    ) {
+      return []
+    }
+
+    result.push(slot)
+  }
+
+  if (
+    result.length !== requiredHours
+  ) {
+    return []
+  }
+
+  return result
+}
 
 export default function Booking() {
   const navigate = useNavigate()
@@ -149,8 +207,12 @@ export default function Booking() {
     useState(() => new Date())
 
   const [slots, setSlots] = useState<TimeSlot[]>([])
+
   const [selectedSlots, setSelectedSlots] =
     useState<TimeSlot[]>([])
+
+  const [bookingDuration, setBookingDuration] =
+    useState<BookingDuration | null>(null)
 
   const [slotFilter, setSlotFilter] = useState<
     'all' | 'available' | 'booked'
@@ -259,11 +321,16 @@ export default function Booking() {
     if (selected.status !== 'available') {
       setSlots([])
       setSelectedSlots([])
+      setBookingDuration(null)
       setLoadingSlots(false)
+
       return
     }
 
-    loadSlots(selectedCourtId, date)
+    loadSlots(
+      selectedCourtId,
+      date
+    )
   }, [selectedCourtId, date])
 
   async function loadCourtAndSettings() {
@@ -318,6 +385,7 @@ export default function Booking() {
 
     setLoadingSlots(true)
     setSelectedSlots([])
+    setBookingDuration(null)
     setSlotFilter('all')
     setAgreedToRules(false)
     setCustomerDetailsOpen(false)
@@ -357,6 +425,7 @@ export default function Booking() {
     setSelectedCourtId(courtId)
     setCourt(selected)
     setSelectedSlots([])
+    setBookingDuration(null)
     setSlotFilter('all')
     setAgreedToRules(false)
     setCustomerDetailsOpen(false)
@@ -368,6 +437,7 @@ export default function Booking() {
     if (!slot.available) return
 
     setError('')
+    setBookingDuration(null)
 
     setSelectedSlots((previous) => {
       const exists = previous.find(
@@ -393,6 +463,163 @@ export default function Booking() {
     })
   }
 
+  function selectBookingDuration(
+    duration: BookingDuration
+  ) {
+    if (slots.length === 0) {
+      setError(
+        'No available time slots for this date.'
+      )
+
+      return
+    }
+
+    setError('')
+
+    let startSlot: TimeSlot | undefined
+
+    /*
+     * If the user already selected a starting
+     * slot, use the earliest selected slot.
+     *
+     * Otherwise, use the first available slot.
+     */
+    if (selectedSlots.length > 0) {
+      startSlot = [...selectedSlots]
+        .sort((a, b) =>
+          a.start_time.localeCompare(
+            b.start_time
+          )
+        )[0]
+    } else {
+      startSlot = slots.find(
+        (slot) => slot.available
+      )
+    }
+
+    if (!startSlot) {
+      setError(
+        'No available starting time found.'
+      )
+
+      return
+    }
+
+    const startIndex =
+      getSlotIndex(
+        slots,
+        startSlot.start_time
+      )
+
+    if (startIndex < 0) {
+      setError(
+        'Unable to determine the starting time.'
+      )
+
+      return
+    }
+
+    /*
+     * 1 hour = 1 slot
+     * 6 hours = 6 consecutive slots
+     * Full day = all operating slots
+     */
+    let requiredHours = 1
+
+    if (duration === '6') {
+      requiredHours = 6
+    }
+
+    if (duration === 'full') {
+      /*
+       * Full day always starts from the first
+       * operating slot of the schedule.
+       *
+       * This keeps "Full Day" predictable even
+       * when the user had previously selected
+       * another starting time.
+       */
+      const firstSlotIndex =
+        slots.findIndex(
+          (slot) => slot.available
+        )
+
+      if (firstSlotIndex < 0) {
+        setError(
+          'No available starting time found.'
+        )
+
+        return
+      }
+
+      const firstAvailableSlot =
+        slots[firstSlotIndex]
+
+      if (
+        firstAvailableSlot.start_time !==
+        slots[0]?.start_time
+      ) {
+        setError(
+          'Full day is not available because an earlier time slot is already booked.'
+        )
+
+        return
+      }
+
+      requiredHours = slots.length
+
+      const fullDaySlots =
+        getConsecutiveAvailableSlots(
+          slots,
+          0,
+          requiredHours
+        )
+
+      if (
+        fullDaySlots.length !==
+        requiredHours
+      ) {
+        setError(
+          'Full day is not available because one or more time slots are already booked.'
+        )
+
+        return
+      }
+
+      setSelectedSlots(fullDaySlots)
+      setBookingDuration('full')
+
+      return
+    }
+
+    const selected =
+      getConsecutiveAvailableSlots(
+        slots,
+        startIndex,
+        requiredHours
+      )
+
+    if (
+      selected.length !==
+      requiredHours
+    ) {
+      if (duration === '6') {
+        setError(
+          'A continuous 6-hour period is not available from this starting time.'
+        )
+      } else {
+        setError(
+          'This time slot is no longer available.'
+        )
+      }
+
+      return
+    }
+
+    setSelectedSlots(selected)
+    setBookingDuration(duration)
+  }
+
   function removeSlot(
     startTime: string
   ) {
@@ -403,6 +630,7 @@ export default function Booking() {
       )
     )
 
+    setBookingDuration(null)
     setError('')
   }
 
@@ -437,10 +665,12 @@ export default function Booking() {
         setError(
           'Please enter your name and phone number'
         )
+
         return
       }
     } else if (!user) {
       navigate('/login')
+
       return
     }
 
@@ -468,6 +698,7 @@ export default function Booking() {
       setError(
         'Please log in before booking with an account.'
       )
+
       return
     }
 
@@ -494,7 +725,8 @@ export default function Booking() {
       await Promise.all(
         selectedSlots.map((slot) =>
           createReservation({
-            court_id: selectedCourtId,
+            court_id:
+              selectedCourtId,
 
             user_id:
               bookAsGuest
@@ -552,6 +784,7 @@ export default function Booking() {
     setProofFile(null)
     setBookingReference('')
     setSelectedSlots([])
+    setBookingDuration(null)
     setError('')
 
     if (selectedCourtId) {
@@ -668,6 +901,12 @@ export default function Booking() {
                       Weekend rate
                     </span>
                   )}
+
+                  {court.is_24_hours && (
+                    <span className="rounded-full bg-court/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-court">
+                      24 Hours
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -769,6 +1008,12 @@ export default function Booking() {
                         {itemWeekendActive && (
                           <span className="rounded-full bg-court/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-court">
                             Weekend
+                          </span>
+                        )}
+
+                        {item.is_24_hours && (
+                          <span className="rounded-full bg-court/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-court">
+                            24H
                           </span>
                         )}
                       </div>
@@ -1068,67 +1313,222 @@ export default function Booking() {
                       {bookingHourlyRate} / hour
                     </p>
                   )}
+
+                  {court?.is_24_hours && (
+                    <p className="mt-1 text-xs font-semibold text-court">
+                      This court operates 24 hours
+                    </p>
+                  )}
                 </div>
               </div>
             </section>
 
             {/* TIME */}
             <section className="rounded-2xl border border-line bg-surface p-4 sm:p-5">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-court">
-                    Step 2
-                  </p>
+              <div className="mb-4 flex flex-col gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-court">
+                      Step 2
+                    </p>
 
-                  <h2 className="mt-1 text-lg font-semibold text-ink">
-                    Select time
-                  </h2>
+                    <h2 className="mt-1 text-lg font-semibold text-ink">
+                      Select time
+                    </h2>
 
-                  <p className="mt-1 text-sm text-muted">
-                    You can select multiple time slots.
-                  </p>
+                    <p className="mt-1 text-sm text-muted">
+                      Choose a duration or select individual time slots.
+                    </p>
+                  </div>
+
+                  {!loadingSlots &&
+                    slots.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          [
+                            'all',
+                            `All ${slots.length}`,
+                          ],
+                          [
+                            'available',
+                            `Available ${availableCount}`,
+                          ],
+                          [
+                            'booked',
+                            `Booked ${bookedCount}`,
+                          ],
+                        ].map(
+                          ([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() =>
+                                setSlotFilter(
+                                  value as
+                                    | 'all'
+                                    | 'available'
+                                    | 'booked'
+                                )
+                              }
+                              className={
+                                'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ' +
+                                (slotFilter ===
+                                value
+                                  ? 'btn-court border-court'
+                                  : 'border-line text-muted hover:border-court hover:text-ink')
+                              }
+                            >
+                              {label}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
                 </div>
 
+                {/* BOOKING DURATION */}
                 {!loadingSlots &&
                   slots.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        [
-                          'all',
-                          `All ${slots.length}`,
-                        ],
-                        [
-                          'available',
-                          `Available ${availableCount}`,
-                        ],
-                        [
-                          'booked',
-                          `Booked ${bookedCount}`,
-                        ],
-                      ].map(
-                        ([value, label]) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() =>
-                              setSlotFilter(
-                                value as
-                                  | 'all'
-                                  | 'available'
-                                  | 'booked'
-                              )
-                            }
-                            className={
-                              'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ' +
-                              (slotFilter ===
-                              value
-                                ? 'btn-court border-court'
-                                : 'border-line text-muted hover:border-court hover:text-ink')
-                            }
-                          >
-                            {label}
-                          </button>
-                        )
+                    <div className="rounded-xl border border-line bg-paper p-3 sm:p-4">
+                      <div className="mb-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-court">
+                          Booking duration
+                        </p>
+
+                        <p className="mt-1 text-xs text-muted">
+                          Select a starting time first if you want the duration to begin at a specific hour.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            selectBookingDuration(
+                              '1'
+                            )
+                          }
+                          className={
+                            'rounded-xl border px-3 py-3 text-left transition-all ' +
+                            (bookingDuration ===
+                            '1'
+                              ? 'border-court bg-court/10 ring-2 ring-court/20'
+                              : 'border-line bg-surface hover:border-court')
+                          }
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-ink">
+                                1 Hour
+                              </p>
+
+                              <p className="mt-0.5 text-xs text-muted">
+                                Single court hour
+                              </p>
+                            </div>
+
+                            {bookingDuration ===
+                              '1' && (
+                              <span className="text-court">
+                                ✓
+                              </span>
+                            )}
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            selectBookingDuration(
+                              '6'
+                            )
+                          }
+                          className={
+                            'rounded-xl border px-3 py-3 text-left transition-all ' +
+                            (bookingDuration ===
+                            '6'
+                              ? 'border-court bg-court/10 ring-2 ring-court/20'
+                              : 'border-line bg-surface hover:border-court')
+                          }
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-ink">
+                                6 Hours
+                              </p>
+
+                              <p className="mt-0.5 text-xs text-muted">
+                                Half day
+                              </p>
+                            </div>
+
+                            {bookingDuration ===
+                              '6' && (
+                              <span className="text-court">
+                                ✓
+                              </span>
+                            )}
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            selectBookingDuration(
+                              'full'
+                            )
+                          }
+                          className={
+                            'rounded-xl border px-3 py-3 text-left transition-all ' +
+                            (bookingDuration ===
+                            'full'
+                              ? 'border-court bg-court/10 ring-2 ring-court/20'
+                              : 'border-line bg-surface hover:border-court')
+                          }
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-ink">
+                                Full Day
+                              </p>
+
+                              <p className="mt-0.5 text-xs text-muted">
+                                Entire operating schedule
+                              </p>
+                            </div>
+
+                            {bookingDuration ===
+                              'full' && (
+                              <span className="text-court">
+                                ✓
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      </div>
+
+                      {bookingDuration && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full bg-court/10 px-2.5 py-1 font-semibold text-court">
+                            {bookingDuration ===
+                              '1'
+                              ? '1-hour booking'
+                              : bookingDuration ===
+                                  '6'
+                                ? '6-hour half day'
+                                : 'Full-day booking'}
+                          </span>
+
+                          <span className="text-muted">
+                            {selectedSlots.length}{' '}
+                            hour
+                            {selectedSlots.length !==
+                            1
+                              ? 's'
+                              : ''}{' '}
+                            selected
+                          </span>
+                        </div>
                       )}
                     </div>
                   )}
@@ -1276,6 +1676,14 @@ export default function Booking() {
                         Booked
                       </span>
                     </div>
+
+                    {error && (
+                      <div className="mt-4 rounded-xl border border-red-900/30 bg-red-950/20 px-4 py-3">
+                        <p className="text-sm font-medium text-red-400">
+                          {error}
+                        </p>
+                      </div>
+                    )}
                   </>
                 )}
             </section>
@@ -1749,6 +2157,7 @@ export default function Booking() {
                                 setError(
                                   'Please enter your name and phone number'
                                 )
+
                                 return
                               }
 
@@ -1759,6 +2168,7 @@ export default function Booking() {
                                 navigate(
                                   '/login'
                                 )
+
                                 return
                               }
 
@@ -1822,6 +2232,24 @@ export default function Booking() {
                     </div>
                   ) : (
                     <>
+                      {bookingDuration && (
+                        <div className="mb-4 rounded-xl border border-court/20 bg-court/5 px-3 py-2.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-court">
+                            Booking type
+                          </p>
+
+                          <p className="mt-0.5 text-sm font-semibold text-ink">
+                            {bookingDuration ===
+                              '1'
+                              ? '1 Hour'
+                              : bookingDuration ===
+                                  '6'
+                                ? '6 Hours · Half Day'
+                                : 'Full Day'}
+                          </p>
+                        </div>
+                      )}
+
                       <div className="space-y-3">
                         {selectedGroups.map(
                           (group) => (
@@ -2038,7 +2466,7 @@ export default function Booking() {
       {/* RULES MODAL */}
       {modalStep === 'rules' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-lg border border-line bg-surface">
+          <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line bg-surface">
             <div className="border-b border-line p-6">
               <h2 className="font-display text-xl font-semibold text-ink">
                 Booking rules
@@ -2088,7 +2516,7 @@ export default function Booking() {
                     )
                     setError('')
                   }}
-                  className="flex-1 rounded-md border border-line px-4 py-2 font-medium text-ink transition-colors hover:border-court"
+                  className="flex-1 rounded-xl border border-line px-4 py-2.5 font-medium text-ink transition-colors hover:border-court"
                 >
                   Back
                 </button>
@@ -2101,7 +2529,7 @@ export default function Booking() {
                   disabled={
                     !agreedToRules
                   }
-                  className="btn-court flex-1 rounded-md px-4 py-2 font-medium transition-colors disabled:opacity-40"
+                  className="btn-court flex-1 rounded-xl px-4 py-2.5 font-medium transition-colors disabled:opacity-40"
                 >
                   Continue to payment
                 </button>
@@ -2114,7 +2542,7 @@ export default function Booking() {
       {/* PAYMENT MODAL */}
       {modalStep === 'payment' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-lg border border-line bg-surface">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line bg-surface">
             <div className="border-b border-line p-6">
               <h2 className="font-display text-xl font-semibold text-ink">
                 Complete payment
@@ -2175,7 +2603,7 @@ export default function Booking() {
                   Upload payment screenshot
                 </label>
 
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-paper px-4 py-6 transition-colors hover:border-court">
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-line bg-paper px-4 py-6 transition-colors hover:border-court">
                   <input
                     type="file"
                     accept="image/*"
@@ -2216,7 +2644,7 @@ export default function Booking() {
                     )
                     setError('')
                   }}
-                  className="flex-1 rounded-md border border-line px-4 py-2 font-medium text-ink transition-colors hover:border-court"
+                  className="flex-1 rounded-xl border border-line px-4 py-2.5 font-medium text-ink transition-colors hover:border-court"
                 >
                   Back
                 </button>
@@ -2230,7 +2658,7 @@ export default function Booking() {
                     !proofFile ||
                     submitting
                   }
-                  className="btn-court flex-1 rounded-md px-4 py-2 font-medium transition-colors disabled:opacity-40"
+                  className="btn-court flex-1 rounded-xl px-4 py-2.5 font-medium transition-colors disabled:opacity-40"
                 >
                   {submitting
                     ? 'Submitting...'
@@ -2245,7 +2673,7 @@ export default function Booking() {
       {/* SUCCESS MODAL */}
       {modalStep === 'success' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-6 text-center">
+          <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-court/15 text-2xl text-court">
               ✓
             </div>
@@ -2258,7 +2686,7 @@ export default function Booking() {
               Your payment proof has been sent for verification. You'll be notified once confirmed.
             </p>
 
-            <div className="my-4 rounded-lg border border-line bg-paper px-4 py-3">
+            <div className="my-4 rounded-xl border border-line bg-paper px-4 py-3">
               <p className="mb-1 text-xs text-muted">
                 Booking reference
               </p>
@@ -2277,7 +2705,7 @@ export default function Booking() {
               onClick={
                 closeModals
               }
-              className="btn-court w-full rounded-md px-6 py-2 font-medium transition-colors"
+              className="btn-court w-full rounded-xl px-6 py-2.5 font-medium transition-colors"
             >
               Done
             </button>
@@ -2287,4 +2715,3 @@ export default function Booking() {
     </div>
   )
 }
-

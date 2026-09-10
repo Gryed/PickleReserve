@@ -32,6 +32,7 @@ export default function CourtManagement() {
   const [editPrice, setEditPrice] = useState('')
   const [editWeekendEnabled, setEditWeekendEnabled] = useState(false)
   const [editWeekendPrice, setEditWeekendPrice] = useState('')
+  const [edit24Hours, setEdit24Hours] = useState(false)
   const [editStatus, setEditStatus] =
     useState<CourtStatus>('available')
   const [savingEdit, setSavingEdit] = useState(false)
@@ -101,6 +102,9 @@ export default function CourtManagement() {
         // Weekend pricing is OFF by default.
         weekend_pricing_enabled: false,
         weekend_price_per_hour: null,
+
+        // 24-hour operations is OFF by default.
+        is_24_hours: false,
       })
 
       setName('')
@@ -142,6 +146,8 @@ export default function CourtManagement() {
         : ''
     )
 
+    setEdit24Hours(court.is_24_hours)
+
     setEditStatus(court.status)
   }
 
@@ -155,6 +161,7 @@ export default function CourtManagement() {
     setEditPrice('')
     setEditWeekendEnabled(false)
     setEditWeekendPrice('')
+    setEdit24Hours(false)
     setEditStatus('available')
   }
 
@@ -220,6 +227,8 @@ export default function CourtManagement() {
             editWeekendEnabled
               ? parsedWeekendPrice
               : null,
+
+          is_24_hours: edit24Hours,
 
           status: editStatus,
         }
@@ -419,8 +428,8 @@ export default function CourtManagement() {
 
           <p className="mt-1 text-sm text-muted">
             New courts are added as Available by
-            default. Weekend pricing is disabled
-            by default.
+            default. Weekend pricing and 24-hour
+            operations are disabled by default.
           </p>
         </div>
 
@@ -527,6 +536,12 @@ export default function CourtManagement() {
                           court.status
                         )}
                       </span>
+
+                      {court.is_24_hours && (
+                        <span className="rounded-full border border-court/20 bg-court/10 px-2.5 py-1 text-xs font-medium text-court">
+                          24 Hours
+                        </span>
+                      )}
                     </div>
 
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
@@ -556,11 +571,20 @@ export default function CourtManagement() {
                       )}
                     </div>
 
-                    {!court.weekend_pricing_enabled && (
-                      <p className="mt-2 text-xs text-muted">
-                        Weekend pricing: Off
-                      </p>
-                    )}
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                      <span>
+                        24-hour operations:{' '}
+                        {court.is_24_hours
+                          ? 'On'
+                          : 'Off'}
+                      </span>
+
+                      {!court.weekend_pricing_enabled && (
+                        <span>
+                          Weekend pricing: Off
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* ACTIONS */}
@@ -619,7 +643,7 @@ export default function CourtManagement() {
 
                 <p className="mt-1 text-sm text-muted">
                   Update the court information,
-                  pricing, and status.
+                  pricing, operating mode, and status.
                 </p>
               </div>
 
@@ -700,8 +724,8 @@ export default function CourtManagement() {
                 />
 
                 <p className="mt-1.5 text-xs text-muted">
-                  Regular rate used Monday through
-                  Friday.
+                  Regular rate used when weekend
+                  pricing is not active.
                 </p>
               </div>
 
@@ -770,6 +794,54 @@ export default function CourtManagement() {
                     </p>
                   </div>
                 )}
+              </div>
+
+              {/* 24 HOURS OPERATIONS */}
+              <div className="rounded-xl border border-line bg-paper p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-ink">
+                      24 Hours Operations
+                    </p>
+
+                    <p className="mt-1 text-xs leading-5 text-muted">
+                      Allow this court to accept
+                      bookings throughout the full
+                      24-hour day.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEdit24Hours(
+                        !edit24Hours
+                      )
+                    }
+                    aria-label="Toggle 24 hours operations"
+                    className={`relative h-6 w-12 shrink-0 rounded-full transition-colors ${
+                      edit24Hours
+                        ? 'bg-court'
+                        : 'bg-line'
+                    }`}
+                  >
+                    <span
+                      className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-paper transition-transform ${
+                        edit24Hours
+                          ? 'translate-x-6'
+                          : ''
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-line bg-surface px-3 py-2.5">
+                  <p className="text-xs text-muted">
+                    {edit24Hours
+                      ? 'ON — This court will use 24-hour availability.'
+                      : 'OFF — This court will follow the normal Operating Hours schedule.'}
+                  </p>
+                </div>
               </div>
 
               {/* STATUS */}
