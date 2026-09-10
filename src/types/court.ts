@@ -2,8 +2,17 @@ export interface Court {
   id: string
   name: string
   type: string | null
+
   price_per_hour: number
-  status: 'available' | 'maintenance' | 'not_available'
+
+  weekend_pricing_enabled: boolean
+  weekend_price_per_hour: number | null
+
+  status:
+    | 'available'
+    | 'maintenance'
+    | 'not_available'
+
   created_at: string
 }
 

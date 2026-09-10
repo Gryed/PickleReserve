@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Court, Settings } from '../types/court'
@@ -63,6 +64,14 @@ function formatDateLong(iso: string) {
     month: 'long',
     day: 'numeric',
   })
+}
+
+function isWeekendDate(iso: string) {
+  const [year, month, day] = iso.split('-').map(Number)
+  const localDate = new Date(year, month - 1, day)
+  const dayOfWeek = localDate.getDay()
+
+  return dayOfWeek === 0 || dayOfWeek === 6
 }
 
 interface SlotGroup {
@@ -207,6 +216,22 @@ export default function Booking() {
   const canGoNext =
     toISODate(addDays(dateWindowStart, 7)) <=
     toISODate(maxBookingDate)
+
+  const isWeekend = isWeekendDate(date)
+
+  const bookingHourlyRate =
+    court?.weekend_pricing_enabled &&
+    isWeekend
+      ? court.weekend_price_per_hour ??
+        court.price_per_hour
+      : court?.price_per_hour ?? 0
+
+  const weekendRateActive =
+    Boolean(
+      court?.weekend_pricing_enabled &&
+        isWeekend &&
+        court.weekend_price_per_hour !== null
+    )
 
   useEffect(() => {
     loadCourtAndSettings()
@@ -382,10 +407,8 @@ export default function Booking() {
   }
 
   function getTotalPrice() {
-    if (!court) return 0
-
     return (
-      court.price_per_hour *
+      bookingHourlyRate *
       selectedSlots.length
     )
   }
@@ -635,9 +658,17 @@ export default function Booking() {
               </h1>
 
               {court && (
-                <p className="mt-1 text-sm text-muted">
-                  ₱{court.price_per_hour} / hour
-                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-muted">
+                    ₱{bookingHourlyRate} / hour
+                  </p>
+
+                  {weekendRateActive && (
+                    <span className="rounded-full bg-court/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-court">
+                      Weekend rate
+                    </span>
+                  )}
+                </div>
               )}
             </div>
 
@@ -689,6 +720,20 @@ export default function Booking() {
               const isNotAvailable =
                 item.status === 'not_available'
 
+              const itemWeekendRate =
+                item.weekend_pricing_enabled &&
+                isWeekend &&
+                item.weekend_price_per_hour !== null
+                  ? item.weekend_price_per_hour
+                  : item.price_per_hour
+
+              const itemWeekendActive =
+                Boolean(
+                  item.weekend_pricing_enabled &&
+                    isWeekend &&
+                    item.weekend_price_per_hour !== null
+                )
+
               return (
                 <button
                   key={item.id}
@@ -716,9 +761,17 @@ export default function Booking() {
                         {item.name}
                       </p>
 
-                      <p className="mt-1 text-sm text-muted">
-                        ₱{item.price_per_hour} / hour
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <p className="text-sm text-muted">
+                          ₱{itemWeekendRate} / hour
+                        </p>
+
+                        {itemWeekendActive && (
+                          <span className="rounded-full bg-court/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-court">
+                            Weekend
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {isSelected &&
@@ -1008,6 +1061,13 @@ export default function Booking() {
                       Today
                     </p>
                   )}
+
+                  {weekendRateActive && (
+                    <p className="mt-1 text-xs font-semibold text-court">
+                      Weekend pricing applies · ₱
+                      {bookingHourlyRate} / hour
+                    </p>
+                  )}
                 </div>
               </div>
             </section>
@@ -1192,10 +1252,7 @@ export default function Booking() {
                                 }
                               >
                                 ₱
-                                {
-                                  court
-                                    ?.price_per_hour
-                                }
+                                {bookingHourlyRate}
                               </span>
                             </button>
                           )
@@ -1851,11 +1908,23 @@ export default function Booking() {
                           <span className="font-medium text-ink">
                             ₱
                             {
-                              court.price_per_hour
+                              bookingHourlyRate
                             }{' '}
                             / hr
                           </span>
                         </div>
+
+                        {weekendRateActive && (
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted">
+                              Pricing
+                            </span>
+
+                            <span className="font-medium text-court">
+                              Weekend rate
+                            </span>
+                          </div>
+                        )}
 
                         <div className="flex justify-between gap-4">
                           <span className="text-muted">
@@ -2218,3 +2287,4 @@ export default function Booking() {
     </div>
   )
 }
+

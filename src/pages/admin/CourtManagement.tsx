@@ -30,7 +30,10 @@ export default function CourtManagement() {
   const [editName, setEditName] = useState('')
   const [editType, setEditType] = useState('')
   const [editPrice, setEditPrice] = useState('')
-  const [editStatus, setEditStatus] = useState<CourtStatus>('available')
+  const [editWeekendEnabled, setEditWeekendEnabled] = useState(false)
+  const [editWeekendPrice, setEditWeekendPrice] = useState('')
+  const [editStatus, setEditStatus] =
+    useState<CourtStatus>('available')
   const [savingEdit, setSavingEdit] = useState(false)
 
   useEffect(() => {
@@ -50,7 +53,11 @@ export default function CourtManagement() {
       setCourts(courtsData)
       setSettings(settingsData)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data')
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to load data'
+      )
     } finally {
       setLoading(false)
     }
@@ -75,8 +82,13 @@ export default function CourtManagement() {
         return
       }
 
-      if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
-        setError('Please enter a valid price per hour.')
+      if (
+        Number.isNaN(parsedPrice) ||
+        parsedPrice <= 0
+      ) {
+        setError(
+          'Please enter a valid price per hour.'
+        )
         return
       }
 
@@ -85,6 +97,10 @@ export default function CourtManagement() {
         type: type.trim() || null,
         price_per_hour: parsedPrice,
         status: 'available',
+
+        // Weekend pricing is OFF by default.
+        weekend_pricing_enabled: false,
+        weekend_price_per_hour: null,
       })
 
       setName('')
@@ -95,7 +111,11 @@ export default function CourtManagement() {
 
       setSuccess('Court added successfully.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add court')
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to add court'
+      )
     } finally {
       setSubmitting(false)
     }
@@ -105,9 +125,23 @@ export default function CourtManagement() {
     clearMessages()
 
     setEditingCourt(court)
+
     setEditName(court.name)
     setEditType(court.type ?? '')
-    setEditPrice(String(court.price_per_hour))
+    setEditPrice(
+      String(court.price_per_hour)
+    )
+
+    setEditWeekendEnabled(
+      court.weekend_pricing_enabled
+    )
+
+    setEditWeekendPrice(
+      court.weekend_price_per_hour !== null
+        ? String(court.weekend_price_per_hour)
+        : ''
+    )
+
     setEditStatus(court.status)
   }
 
@@ -115,13 +149,18 @@ export default function CourtManagement() {
     if (savingEdit) return
 
     setEditingCourt(null)
+
     setEditName('')
     setEditType('')
     setEditPrice('')
+    setEditWeekendEnabled(false)
+    setEditWeekendPrice('')
     setEditStatus('available')
   }
 
-  async function handleSaveEdit(e: React.FormEvent) {
+  async function handleSaveEdit(
+    e: React.FormEvent
+  ) {
     e.preventDefault()
 
     if (!editingCourt) return
@@ -130,37 +169,84 @@ export default function CourtManagement() {
     setSavingEdit(true)
 
     try {
-      const parsedPrice = parseFloat(editPrice)
+      const parsedPrice =
+        parseFloat(editPrice)
+
+      const parsedWeekendPrice =
+        editWeekendPrice.trim() === ''
+          ? null
+          : parseFloat(editWeekendPrice)
 
       if (!editName.trim()) {
         setError('Court name is required.')
         return
       }
 
-      if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
-        setError('Please enter a valid price per hour.')
+      if (
+        Number.isNaN(parsedPrice) ||
+        parsedPrice <= 0
+      ) {
+        setError(
+          'Please enter a valid price per hour.'
+        )
         return
       }
 
-      await updateCourt(editingCourt.id, {
-        name: editName.trim(),
-        type: editType.trim() || null,
-        price_per_hour: parsedPrice,
-        status: editStatus,
-      })
+      if (
+        editWeekendEnabled &&
+        (
+          parsedWeekendPrice === null ||
+          Number.isNaN(parsedWeekendPrice) ||
+          parsedWeekendPrice <= 0
+        )
+      ) {
+        setError(
+          'Please enter a valid weekend price per hour.'
+        )
+        return
+      }
+
+      await updateCourt(
+        editingCourt.id,
+        {
+          name: editName.trim(),
+          type: editType.trim() || null,
+          price_per_hour: parsedPrice,
+
+          weekend_pricing_enabled:
+            editWeekendEnabled,
+
+          weekend_price_per_hour:
+            editWeekendEnabled
+              ? parsedWeekendPrice
+              : null,
+
+          status: editStatus,
+        }
+      )
 
       closeEditModal()
+
       await loadData()
 
-      setSuccess('Court updated successfully.')
+      setSuccess(
+        'Court updated successfully.'
+      )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update court')
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to update court'
+      )
     } finally {
       setSavingEdit(false)
     }
   }
 
-  async function handleDelete(id: string, courtName: string) {
+  async function handleDelete(
+    id: string,
+    courtName: string
+  ) {
     clearMessages()
 
     const confirmed = confirm(
@@ -171,11 +257,18 @@ export default function CourtManagement() {
 
     try {
       await deleteCourt(id)
+
       await loadData()
 
-      setSuccess(`${courtName} deleted successfully.`)
+      setSuccess(
+        `${courtName} deleted successfully.`
+      )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete court')
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to delete court'
+      )
     }
   }
 
@@ -185,11 +278,14 @@ export default function CourtManagement() {
     clearMessages()
 
     try {
-      const updated = await updateSettings({
-        show_court_type: !settings.show_court_type,
-      })
+      const updated =
+        await updateSettings({
+          show_court_type:
+            !settings.show_court_type,
+        })
 
       setSettings(updated)
+
       setSuccess(
         updated.show_court_type
           ? 'Court type is now visible to customers.'
@@ -204,7 +300,9 @@ export default function CourtManagement() {
     }
   }
 
-  function getStatusLabel(status: CourtStatus) {
+  function getStatusLabel(
+    status: CourtStatus
+  ) {
     switch (status) {
       case 'available':
         return 'Available'
@@ -220,7 +318,9 @@ export default function CourtManagement() {
     }
   }
 
-  function getStatusClasses(status: CourtStatus) {
+  function getStatusClasses(
+    status: CourtStatus
+  ) {
     switch (status) {
       case 'available':
         return 'bg-court/15 text-court border-court/20'
@@ -257,7 +357,8 @@ export default function CourtManagement() {
         </h1>
 
         <p className="mt-2 text-sm leading-6 text-muted">
-          Add, edit, and manage the courts available in your facility.
+          Add, edit, and manage the courts available
+          in your facility.
         </p>
       </div>
 
@@ -283,8 +384,8 @@ export default function CourtManagement() {
             </p>
 
             <p className="mt-1 text-sm leading-5 text-muted">
-              Toggle off to hide the court type field from the public
-              booking page.
+              Toggle off to hide the court type field
+              from the public booking page.
             </p>
           </div>
 
@@ -299,7 +400,7 @@ export default function CourtManagement() {
             }`}
           >
             <span
-              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-paper transition-transform ${
+              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-paper transition-transform ${
                 settings.show_court_type
                   ? 'translate-x-6'
                   : ''
@@ -317,7 +418,9 @@ export default function CourtManagement() {
           </h2>
 
           <p className="mt-1 text-sm text-muted">
-            New courts are added as Available by default.
+            New courts are added as Available by
+            default. Weekend pricing is disabled
+            by default.
           </p>
         </div>
 
@@ -329,7 +432,9 @@ export default function CourtManagement() {
             type="text"
             placeholder="Court name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) =>
+              setName(e.target.value)
+            }
             className="rounded-md border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted focus:border-court focus:outline-none"
             required
           />
@@ -338,7 +443,9 @@ export default function CourtManagement() {
             type="text"
             placeholder="Type / Surface"
             value={type}
-            onChange={(e) => setType(e.target.value)}
+            onChange={(e) =>
+              setType(e.target.value)
+            }
             className="rounded-md border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted focus:border-court focus:outline-none"
           />
 
@@ -348,7 +455,9 @@ export default function CourtManagement() {
             step="0.01"
             placeholder="Price / hour"
             value={price}
-            onChange={(e) => setPrice(e.target.value)}
+            onChange={(e) =>
+              setPrice(e.target.value)
+            }
             className="rounded-md border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted focus:border-court focus:outline-none"
             required
           />
@@ -358,7 +467,9 @@ export default function CourtManagement() {
             disabled={submitting}
             className="btn-court rounded-md px-4 py-2.5 font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? 'Adding...' : 'Add Court'}
+            {submitting
+              ? 'Adding...'
+              : 'Add Court'}
           </button>
         </form>
       </section>
@@ -373,7 +484,10 @@ export default function CourtManagement() {
 
             <p className="mt-1 text-sm text-muted">
               {courts.length}{' '}
-              {courts.length === 1 ? 'court' : 'courts'} configured
+              {courts.length === 1
+                ? 'court'
+                : 'courts'}{' '}
+              configured
             </p>
           </div>
         </div>
@@ -385,7 +499,8 @@ export default function CourtManagement() {
             </p>
 
             <p className="mt-1 text-sm text-muted">
-              Add your first court using the form above.
+              Add your first court using the form
+              above.
             </p>
           </div>
         ) : (
@@ -408,26 +523,53 @@ export default function CourtManagement() {
                           court.status
                         )}`}
                       >
-                        {getStatusLabel(court.status)}
+                        {getStatusLabel(
+                          court.status
+                        )}
                       </span>
                     </div>
 
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
                       {court.type && (
-                        <span>{court.type}</span>
+                        <span>
+                          {court.type}
+                        </span>
                       )}
 
                       <span>
-                        ₱{court.price_per_hour.toFixed(2)} / hour
+                        ₱
+                        {court.price_per_hour.toFixed(
+                          2
+                        )}{' '}
+                        / hour
                       </span>
+
+                      {court.weekend_pricing_enabled && (
+                        <span className="font-medium text-court">
+                          Weekend: ₱
+                          {(
+                            court.weekend_price_per_hour ??
+                            court.price_per_hour
+                          ).toFixed(2)}{' '}
+                          / hour
+                        </span>
+                      )}
                     </div>
+
+                    {!court.weekend_pricing_enabled && (
+                      <p className="mt-2 text-xs text-muted">
+                        Weekend pricing: Off
+                      </p>
+                    )}
                   </div>
 
                   {/* ACTIONS */}
                   <div className="flex shrink-0 items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => openEditModal(court)}
+                      onClick={() =>
+                        openEditModal(court)
+                      }
                       className="rounded-md border border-line px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-court hover:text-court"
                     >
                       Edit
@@ -436,7 +578,10 @@ export default function CourtManagement() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleDelete(court.id, court.name)
+                        handleDelete(
+                          court.id,
+                          court.name
+                        )
                       }
                       className="rounded-md border border-red-500/20 px-3 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
                     >
@@ -473,7 +618,8 @@ export default function CourtManagement() {
                 </h2>
 
                 <p className="mt-1 text-sm text-muted">
-                  Update the court information and status.
+                  Update the court information,
+                  pricing, and status.
                 </p>
               </div>
 
@@ -503,7 +649,9 @@ export default function CourtManagement() {
                   type="text"
                   value={editName}
                   onChange={(e) =>
-                    setEditName(e.target.value)
+                    setEditName(
+                      e.target.value
+                    )
                   }
                   placeholder="e.g. Court 1"
                   className="w-full rounded-md border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted focus:border-court focus:outline-none"
@@ -521,17 +669,19 @@ export default function CourtManagement() {
                   type="text"
                   value={editType}
                   onChange={(e) =>
-                    setEditType(e.target.value)
+                    setEditType(
+                      e.target.value
+                    )
                   }
                   placeholder="e.g. Indoor, Outdoor"
                   className="w-full rounded-md border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted focus:border-court focus:outline-none"
                 />
               </div>
 
-              {/* PRICE */}
+              {/* REGULAR PRICE */}
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink">
-                  Price per hour
+                  Weekday price per hour
                 </label>
 
                 <input
@@ -540,12 +690,86 @@ export default function CourtManagement() {
                   step="0.01"
                   value={editPrice}
                   onChange={(e) =>
-                    setEditPrice(e.target.value)
+                    setEditPrice(
+                      e.target.value
+                    )
                   }
                   placeholder="250"
                   className="w-full rounded-md border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted focus:border-court focus:outline-none"
                   required
                 />
+
+                <p className="mt-1.5 text-xs text-muted">
+                  Regular rate used Monday through
+                  Friday.
+                </p>
+              </div>
+
+              {/* WEEKEND PRICING */}
+              <div className="rounded-xl border border-line bg-paper p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-ink">
+                      Weekend pricing
+                    </p>
+
+                    <p className="mt-1 text-xs leading-5 text-muted">
+                      Use a different hourly rate on
+                      Saturday and Sunday.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditWeekendEnabled(
+                        !editWeekendEnabled
+                      )
+                    }
+                    aria-label="Toggle weekend pricing"
+                    className={`relative h-6 w-12 shrink-0 rounded-full transition-colors ${
+                      editWeekendEnabled
+                        ? 'bg-court'
+                        : 'bg-line'
+                    }`}
+                  >
+                    <span
+                      className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-paper transition-transform ${
+                        editWeekendEnabled
+                          ? 'translate-x-6'
+                          : ''
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {editWeekendEnabled && (
+                  <div className="mt-4">
+                    <label className="mb-1.5 block text-sm font-medium text-ink">
+                      Weekend price per hour
+                    </label>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editWeekendPrice}
+                      onChange={(e) =>
+                        setEditWeekendPrice(
+                          e.target.value
+                        )
+                      }
+                      placeholder="300"
+                      className="w-full rounded-md border border-line bg-surface px-3 py-2.5 text-ink placeholder:text-muted focus:border-court focus:outline-none"
+                      required
+                    />
+
+                    <p className="mt-2 text-xs text-muted">
+                      This rate will be used for
+                      Saturday and Sunday bookings.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* STATUS */}
