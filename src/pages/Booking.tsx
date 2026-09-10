@@ -685,7 +685,7 @@ export default function Booking() {
     setModalStep('payment')
   }
 
-  async function handleSubmitBooking() {
+    async function handleSubmitBooking() {
     if (
       !selectedCourtId ||
       selectedSlots.length === 0 ||
@@ -725,43 +725,25 @@ export default function Booking() {
       await Promise.all(
         selectedSlots.map((slot) =>
           createReservation({
-            court_id:
-              selectedCourtId,
-
-            user_id:
-              bookAsGuest
-                ? null
-                : user!.id,
-
-            guest_name:
-              bookAsGuest
-                ? guestName.trim()
-                : null,
-
-            guest_phone:
-              bookAsGuest
-                ? guestPhone.trim()
-                : null,
-
+            court_id: selectedCourtId,
+            user_id: bookAsGuest
+              ? null
+              : user?.id ?? null,
+            guest_name: bookAsGuest
+              ? guestName.trim()
+              : null,
+            guest_phone: bookAsGuest
+              ? guestPhone.trim()
+              : null,
             date,
-
-            start_time:
-              slot.start_time,
-
-            end_time:
-              slot.end_time,
-
-            payment_type:
-              paymentType,
-
-            amount_due:
-              amountPerSlot,
-
-            payment_proof_url:
-              proofUrl,
-
-            booking_reference:
-              reference,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+            status: 'confirmed',
+            payment_type: paymentType,
+            amount_due: amountPerSlot,
+            payment_status: 'pending',
+            payment_proof_url: proofUrl,
+            booking_reference: reference,
           })
         )
       )

@@ -189,40 +189,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="border-t border-line bg-surface">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-8 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-12">
-          <div>
-            <p className="font-display text-lg font-semibold text-ink">
-              PickleReserve
-            </p>
-
-            <p className="mt-1 text-xs text-muted">
-              Your court. Your time. Your game.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-5 text-xs text-muted">
-            <Link
-              to="/booking"
-              className="transition hover:text-court"
-            >
-              Book a Court
-            </Link>
-
-            <Link
-              to="/find-booking"
-              className="transition hover:text-court"
-            >
-              Find Booking
-            </Link>
-          </div>
-
-          <p className="text-xs text-muted">
-            © 2026 PickleReserve · Website by Gryed
-          </p>
-        </div>
-      </footer>
+      
     </main>
   )
 }

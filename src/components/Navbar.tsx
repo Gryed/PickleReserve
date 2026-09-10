@@ -1,3 +1,4 @@
+
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -12,37 +13,50 @@ export default function Navbar() {
 
   return (
     <nav className="border-b border-line bg-paper">
-      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
-        <Link to="/" className="font-display font-semibold text-lg text-ink tracking-tight">
+      <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4 sm:px-8">
+        <Link
+          to="/"
+          className="font-display text-lg font-semibold tracking-tight text-ink"
+        >
           Pickle<span className="text-court">Reserve</span>
         </Link>
 
         <div className="flex items-center gap-5 text-sm">
           {user ? (
             <>
-              <span className="text-ink hidden sm:inline">Hi! {username ?? 'there'}</span>
-              <Link to="/my-bookings" className="text-muted hover:text-court transition-colors">
+              <span className="hidden text-ink sm:inline">
+                Hi! {username ?? 'there'}
+              </span>
+
+              <Link
+                to="/my-bookings"
+                className="text-muted transition-colors hover:text-court"
+              >
                 My bookings
               </Link>
-              <Link to="/find-booking" className="text-muted hover:text-court transition-colors">
+
+              <Link
+                to="/find-booking"
+                className="text-muted transition-colors hover:text-court"
+              >
                 Find booking
               </Link>
-              <button onClick={handleLogout} className="text-muted hover:text-court transition-colors">
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="text-muted transition-colors hover:text-court"
+              >
                 Log out
               </button>
             </>
           ) : (
-            <>
-              <Link to="/find-booking" className="text-muted hover:text-court transition-colors">
-                Find booking
-              </Link>
-              <Link to="/login" className="text-muted hover:text-court transition-colors">
-                Log in
-              </Link>
-              <Link to="/signup" className="btn-court px-4 py-2 rounded-md font-medium transition-colors">
-                Sign up
-              </Link>
-            </>
+            <Link
+              to="/find-booking"
+              className="text-muted transition-colors hover:text-court"
+            >
+              Find booking
+            </Link>
           )}
         </div>
       </div>

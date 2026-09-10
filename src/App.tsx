@@ -1,5 +1,7 @@
+
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
+import Footer from './components/Footer'
 import AdminLayout from './components/AdminLayout'
 import Home from './pages/Home'
 import Booking from './pages/Booking'
@@ -15,17 +17,90 @@ import PaymentSettings from './pages/admin/PaymentSettings'
 import PendingPayments from './pages/admin/PendingPayments'
 import Reservations from './pages/admin/Reservations'
 import Reports from './pages/admin/Reports'
+import CreateBooking from './pages/admin/CreateBooking'
+
+function PublicLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <div className="min-h-screen bg-paper">
+      <Navbar />
+
+      {children}
+
+      <Footer />
+    </div>
+  )
+}
 
 function App() {
   return (
     <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<><Navbar /><Home /></>} />
-          <Route path="/booking" element={<><Navbar /><Booking /></>} />
-          <Route path="/my-bookings" element={<><Navbar /><MyBookings /></>} />
-          <Route path="/find-booking" element={<><Navbar /><FindBooking /></>} />
-          <Route path="/login" element={<><Navbar /><Login /></>} />
-          <Route path="/signup" element={<><Navbar /><Signup /></>} />
+      <Routes>
+        {/* =========================
+            PUBLIC ROUTES
+        ========================== */}
+
+        <Route
+          path="/"
+          element={
+            <PublicLayout>
+              <Home />
+            </PublicLayout>
+          }
+        />
+
+        <Route
+          path="/booking"
+          element={
+            <PublicLayout>
+              <Booking />
+            </PublicLayout>
+          }
+        />
+
+        <Route
+          path="/my-bookings"
+          element={
+            <PublicLayout>
+              <MyBookings />
+            </PublicLayout>
+          }
+        />
+
+        <Route
+          path="/find-booking"
+          element={
+            <PublicLayout>
+              <FindBooking />
+            </PublicLayout>
+          }
+        />
+
+        <Route
+          path="/login"
+          element={
+            <PublicLayout>
+              <Login />
+            </PublicLayout>
+          }
+        />
+
+        <Route
+          path="/signup"
+          element={
+            <PublicLayout>
+              <Signup />
+            </PublicLayout>
+          }
+        />
+
+        {/* =========================
+            ADMIN ROUTES
+        ========================== */}
+
         <Route
           path="/admin"
           element={
@@ -36,6 +111,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/admin/courts"
           element={
@@ -46,6 +122,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/admin/hours"
           element={
@@ -56,6 +133,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/admin/payments"
           element={
@@ -66,6 +144,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/admin/payments/pending"
           element={
@@ -76,6 +155,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/admin/reservations"
           element={
@@ -86,6 +166,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/admin/reports"
           element={
@@ -96,7 +177,30 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="*" element={<div className="p-8">404 — Page Not Found</div>} />
+
+        <Route
+          path="/admin/create-booking"
+          element={
+            <ProtectedRoute>
+              <AdminLayout>
+                <CreateBooking />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================
+            404
+        ========================== */}
+
+        <Route
+          path="*"
+          element={
+            <div className="flex min-h-screen items-center justify-center bg-paper p-8 text-muted">
+              404 — Page Not Found
+            </div>
+          }
+        />
       </Routes>
     </BrowserRouter>
   )
