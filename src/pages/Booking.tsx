@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Court, Settings } from '../types/court'
@@ -236,6 +237,11 @@ export default function Booking() {
   const [customerDetailsOpen, setCustomerDetailsOpen] =
     useState(false)
 
+  const [customerAlertOpen, setCustomerAlertOpen] =
+    useState(false)
+
+  const [copied, setCopied] = useState(false)
+
   const [loadingCourts, setLoadingCourts] =
     useState(true)
 
@@ -429,6 +435,7 @@ export default function Booking() {
     setSlotFilter('all')
     setAgreedToRules(false)
     setCustomerDetailsOpen(false)
+    setCustomerAlertOpen(false)
     setModalStep('none')
     setError('')
   }
@@ -478,12 +485,6 @@ export default function Booking() {
 
     let startSlot: TimeSlot | undefined
 
-    /*
-     * If the user already selected a starting
-     * slot, use the earliest selected slot.
-     *
-     * Otherwise, use the first available slot.
-     */
     if (selectedSlots.length > 0) {
       startSlot = [...selectedSlots]
         .sort((a, b) =>
@@ -519,11 +520,6 @@ export default function Booking() {
       return
     }
 
-    /*
-     * 1 hour = 1 slot
-     * 6 hours = 6 consecutive slots
-     * Full day = all operating slots
-     */
     let requiredHours = 1
 
     if (duration === '6') {
@@ -531,14 +527,6 @@ export default function Booking() {
     }
 
     if (duration === 'full') {
-      /*
-       * Full day always starts from the first
-       * operating slot of the schedule.
-       *
-       * This keeps "Full Day" predictable even
-       * when the user had previously selected
-       * another starting time.
-       */
       const firstSlotIndex =
         slots.findIndex(
           (slot) => slot.available
@@ -656,21 +644,25 @@ export default function Booking() {
     )
   }
 
-  function openRulesModal() {
+  function validateCustomerDetails() {
     if (bookAsGuest) {
       if (
         !guestName.trim() ||
         !guestPhone.trim()
       ) {
-        setError(
-          'Please enter your name and phone number'
-        )
-
-        return
+        setCustomerAlertOpen(true)
+        return false
       }
     } else if (!user) {
       navigate('/login')
+      return false
+    }
 
+    return true
+  }
+
+  function openRulesModal() {
+    if (!validateCustomerDetails()) {
       return
     }
 
@@ -685,7 +677,27 @@ export default function Booking() {
     setModalStep('payment')
   }
 
-    async function handleSubmitBooking() {
+  async function handleCopyBookingReference() {
+    if (!bookingReference) return
+
+    try {
+      await navigator.clipboard.writeText(
+        bookingReference
+      )
+
+      setCopied(true)
+
+      window.setTimeout(() => {
+        setCopied(false)
+      }, 2000)
+    } catch {
+      setError(
+        'Unable to copy the booking reference.'
+      )
+    }
+  }
+
+  async function handleSubmitBooking() {
     if (
       !selectedCourtId ||
       selectedSlots.length === 0 ||
@@ -749,6 +761,7 @@ export default function Booking() {
       )
 
       setBookingReference(reference)
+      setCopied(false)
       setModalStep('success')
     } catch (err) {
       setError(
@@ -765,6 +778,7 @@ export default function Booking() {
     setModalStep('none')
     setProofFile(null)
     setBookingReference('')
+    setCopied(false)
     setSelectedSlots([])
     setBookingDuration(null)
     setError('')
@@ -785,12 +799,6 @@ export default function Booking() {
     )
   }
 
-  /*
-   * IMPORTANT:
-   * Don't return early when there are no available courts.
-   * We still want maintenance / unavailable courts
-   * to be visible.
-   */
   if (courts.length === 0) {
     return (
       <div className="mx-auto max-w-2xl p-8 text-center">
@@ -805,10 +813,6 @@ export default function Booking() {
     )
   }
 
-  /*
-   * If selected court somehow becomes unavailable,
-   * automatically select the first available one.
-   */
   if (
     !court &&
     courts.some(
@@ -1740,7 +1744,7 @@ export default function Booking() {
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="sm:col-span-2">
                           <label className="mb-2 block text-sm font-medium text-ink">
-                            Full name
+                            Name
                           </label>
 
                           <input
@@ -1972,7 +1976,7 @@ export default function Booking() {
                             <div className="space-y-4">
                               <div>
                                 <label className="mb-2 block text-sm font-medium text-ink">
-                                  Full name
+                                  Name
                                 </label>
 
                                 <input
@@ -2132,25 +2136,8 @@ export default function Booking() {
                             type="button"
                             onClick={() => {
                               if (
-                                bookAsGuest &&
-                                (!guestName.trim() ||
-                                  !guestPhone.trim())
+                                !validateCustomerDetails()
                               ) {
-                                setError(
-                                  'Please enter your name and phone number'
-                                )
-
-                                return
-                              }
-
-                              if (
-                                !bookAsGuest &&
-                                !user
-                              ) {
-                                navigate(
-                                  '/login'
-                                )
-
                                 return
                               }
 
@@ -2445,6 +2432,54 @@ export default function Booking() {
           </div>
         )}
 
+      {/* CUSTOMER VALIDATION ALERT */}
+      {customerAlertOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="customer-required-title"
+        >
+          <button
+            type="button"
+            aria-label="Close customer information notice"
+            onClick={() =>
+              setCustomerAlertOpen(false)
+            }
+            className="absolute inset-0 cursor-default"
+          />
+
+          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
+            <div className="p-6 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10 text-2xl text-amber-400">
+                !
+              </div>
+
+              <h2
+                id="customer-required-title"
+                className="font-display text-xl font-semibold text-ink"
+              >
+                Customer information required
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Please enter the customer's name and mobile number before continuing with your booking.
+              </p>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setCustomerAlertOpen(false)
+                }
+                className="btn-court mt-5 w-full rounded-xl px-5 py-3 text-sm font-semibold"
+              >
+                Okay, got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* RULES MODAL */}
       {modalStep === 'rules' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -2669,13 +2704,28 @@ export default function Booking() {
             </p>
 
             <div className="my-4 rounded-xl border border-line bg-paper px-4 py-3">
-              <p className="mb-1 text-xs text-muted">
+              <p className="mb-2 text-xs text-muted">
                 Booking reference
               </p>
 
-              <p className="font-display text-lg font-semibold tracking-wide text-court">
-                {bookingReference}
-              </p>
+              <div className="flex items-center justify-center gap-2">
+                <p className="font-display text-lg font-semibold tracking-wide text-court">
+                  {bookingReference}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={
+                    handleCopyBookingReference
+                  }
+                  className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] font-semibold text-muted transition-colors hover:border-court hover:text-court"
+                  aria-label="Copy booking reference"
+                >
+                  {copied
+                    ? '✓ Copied!'
+                    : 'Copy'}
+                </button>
+              </div>
             </div>
 
             <p className="mb-6 text-xs text-muted">
@@ -2697,3 +2747,4 @@ export default function Booking() {
     </div>
   )
 }
+
