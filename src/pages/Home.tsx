@@ -7,7 +7,7 @@ export default function Home() {
       <section className="relative min-h-[calc(100vh-64px)] overflow-hidden">
         {/* Hero Image */}
         <img
-          src="/images/pickleball-hero.jpg"
+          src="/images/alexxamie-hero.jpg"
           alt="Pickleball court"
           className="absolute inset-0 h-full w-full object-cover"
         />
