@@ -1,6 +1,7 @@
 
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import NotificationBell from './NotificationBell'
 
 export default function Navbar() {
   const { user, username, signOut } = useAuth()
@@ -9,6 +10,7 @@ export default function Navbar() {
   async function handleLogout() {
     await signOut()
     navigate('/')
+    
   }
 
   return (
@@ -27,6 +29,8 @@ export default function Navbar() {
               <span className="hidden text-ink sm:inline">
                 Hi! {username ?? 'there'}
               </span>
+
+              <NotificationBell userId={user.id} />
 
               <Link
                 to="/my-bookings"

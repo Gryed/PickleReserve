@@ -123,23 +123,46 @@ export function subscribeToNotifications(
     notification: Notification
   ) => void
 ) {
-  const channel = supabase
-    .channel(`notifications:${userId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${userId}`,
-      },
-      (payload) => {
-        onNotification(
-          payload.new as Notification
-        )
-      }
-    )
-    .subscribe()
+  const channelName =
+    `notifications:${userId}:${crypto.randomUUID()}`
+
+  const channel = supabase.channel(channelName)
+
+  channel.on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'notifications',
+      filter: `user_id=eq.${userId}`,
+    },
+    (payload) => {
+      onNotification(
+        payload.new as Notification
+      )
+    }
+  )
+
+  channel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      console.log(
+        'Notification realtime connected:',
+        userId
+      )
+    }
+
+    if (status === 'CHANNEL_ERROR') {
+      console.error(
+        'Notification realtime channel error'
+      )
+    }
+
+    if (status === 'TIMED_OUT') {
+      console.error(
+        'Notification realtime connection timed out'
+      )
+    }
+  })
 
   return () => {
     supabase.removeChannel(channel)

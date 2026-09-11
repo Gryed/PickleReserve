@@ -1694,22 +1694,22 @@ const bookedCount =
                     </div>
 
                     <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-4 text-xs text-muted">
-  <span className="flex items-center gap-2">
-    <span className="h-2.5 w-2.5 rounded-full border border-line bg-paper" />
+  <span className="inline-flex items-center gap-2">
+    <span className="h-2.5 w-2.5 rounded-full border border-court/40 bg-paper" />
     Available
   </span>
 
-  <span className="flex items-center gap-2">
+  <span className="inline-flex items-center gap-2">
     <span className="h-2.5 w-2.5 rounded-full bg-court" />
     Selected
   </span>
 
-  <span className="flex items-center gap-2">
+  <span className="inline-flex items-center gap-2">
     <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
     Pending
   </span>
 
-  <span className="flex items-center gap-2">
+  <span className="inline-flex items-center gap-2">
     <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
     Booked
   </span>
