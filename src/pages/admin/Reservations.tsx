@@ -47,7 +47,24 @@ type BookingGroup = {
 
 type Filter = 'all' | 'confirmed' | 'cancelled'
 
-type ActionType = 'verify' | 'reject' | 'cancel'
+type PaymentFilter =
+  | 'all'
+  | 'pending'
+  | 'verified'
+  | 'rejected'
+
+type SortOption =
+  | 'newest'
+  | 'oldest'
+  | 'date_earliest'
+  | 'date_latest'
+  | 'amount_highest'
+  | 'amount_lowest'
+
+type ActionType =
+  | 'verify'
+  | 'reject'
+  | 'cancel'
 
 type ActionTarget = {
   booking: BookingGroup
@@ -256,8 +273,30 @@ export default function Reservations() {
   const [error, setError] =
     useState('')
 
+  /* =======================================================
+     SEARCH / FILTER STATE
+  ======================================================= */
+
+  const [search, setSearch] =
+    useState('')
+
   const [filter, setFilter] =
     useState<Filter>('all')
+
+  const [paymentFilter, setPaymentFilter] =
+    useState<PaymentFilter>('all')
+
+  const [courtFilter, setCourtFilter] =
+    useState('all')
+
+  const [bookingDate, setBookingDate] =
+    useState('')
+
+  const [sortBy, setSortBy] =
+    useState<SortOption>('newest')
+
+  const [showFilters, setShowFilters] =
+    useState(false)
 
   const [selectedImage, setSelectedImage] =
     useState<string | null>(null)
@@ -361,21 +400,245 @@ export default function Reservations() {
   )
 
   /* =======================================================
-     FILTER
+     COURT OPTIONS
+  ======================================================= */
+
+  const courtOptions =
+    useMemo(() => {
+      const names = new Set<string>()
+
+      rows.forEach((row) => {
+        if (row.courts?.name) {
+          names.add(
+            row.courts.name
+          )
+        }
+      })
+
+      return Array.from(
+        names
+      ).sort(
+        (a, b) =>
+          a.localeCompare(b)
+      )
+    }, [rows])
+
+  /* =======================================================
+     HAS ACTIVE FILTERS
+  ======================================================= */
+
+  const hasFilters =
+    search.trim() !== '' ||
+    filter !== 'all' ||
+    paymentFilter !== 'all' ||
+    courtFilter !== 'all' ||
+    bookingDate !== '' ||
+    sortBy !== 'newest'
+
+  /* =======================================================
+     CLEAR FILTERS
+  ======================================================= */
+
+  function clearFilters() {
+    setSearch('')
+    setFilter('all')
+    setPaymentFilter('all')
+    setCourtFilter('all')
+    setBookingDate('')
+    setSortBy('newest')
+  }
+
+  /* =======================================================
+     SEARCH / FILTER / SORT
   ======================================================= */
 
   const filteredBookings =
     useMemo(() => {
-      if (filter === 'all') {
-        return bookings
-      }
+      const query =
+        search
+          .trim()
+          .toLowerCase()
 
-      return bookings.filter(
-        (booking) =>
-          booking.status ===
-          filter
+      const result =
+        bookings.filter(
+          (booking) => {
+            const matchesSearch =
+              !query ||
+              booking.rows.some(
+                (row) => {
+                  const reference =
+                    row.booking_reference ||
+                    ''
+
+                  const customer =
+                    row.guest_name ||
+                    ''
+
+                  const phone =
+                    row.guest_phone ||
+                    ''
+
+                  const court =
+                    row.courts?.name ||
+                    ''
+
+                  return (
+                    reference
+                      .toLowerCase()
+                      .includes(query) ||
+                    customer
+                      .toLowerCase()
+                      .includes(query) ||
+                    phone
+                      .toLowerCase()
+                      .includes(query) ||
+                    court
+                      .toLowerCase()
+                      .includes(query)
+                  )
+                }
+              )
+
+            const matchesStatus =
+              filter === 'all' ||
+              booking.status ===
+                filter
+
+            const matchesPayment =
+              paymentFilter ===
+                'all' ||
+              booking.payment_status ===
+                paymentFilter
+
+            const matchesCourt =
+              courtFilter ===
+                'all' ||
+              booking.rows.some(
+                (row) =>
+                  row.courts?.name ===
+                  courtFilter
+              )
+
+            const matchesDate =
+              !bookingDate ||
+              booking.rows.some(
+                (row) =>
+                  row.date ===
+                  bookingDate
+              )
+
+            return (
+              matchesSearch &&
+              matchesStatus &&
+              matchesPayment &&
+              matchesCourt &&
+              matchesDate
+            )
+          }
+        )
+
+      return [...result].sort(
+        (a, b) => {
+          if (
+            sortBy ===
+            'newest'
+          ) {
+            return (
+              new Date(
+                b.firstRow.created_at
+              ).getTime() -
+              new Date(
+                a.firstRow.created_at
+              ).getTime()
+            )
+          }
+
+          if (
+            sortBy ===
+            'oldest'
+          ) {
+            return (
+              new Date(
+                a.firstRow.created_at
+              ).getTime() -
+              new Date(
+                b.firstRow.created_at
+              ).getTime()
+            )
+          }
+
+          if (
+            sortBy ===
+            'date_earliest'
+          ) {
+            const dateCompare =
+              a.firstRow.date.localeCompare(
+                b.firstRow.date
+              )
+
+            if (
+              dateCompare !== 0
+            ) {
+              return dateCompare
+            }
+
+            return a.start_time.localeCompare(
+              b.start_time
+            )
+          }
+
+          if (
+            sortBy ===
+            'date_latest'
+          ) {
+            const dateCompare =
+              b.firstRow.date.localeCompare(
+                a.firstRow.date
+              )
+
+            if (
+              dateCompare !== 0
+            ) {
+              return dateCompare
+            }
+
+            return b.start_time.localeCompare(
+              a.start_time
+            )
+          }
+
+          if (
+            sortBy ===
+            'amount_highest'
+          ) {
+            return (
+              b.totalAmount -
+              a.totalAmount
+            )
+          }
+
+          if (
+            sortBy ===
+            'amount_lowest'
+          ) {
+            return (
+              a.totalAmount -
+              b.totalAmount
+            )
+          }
+
+          return 0
+        }
       )
-    }, [bookings, filter])
+    }, [
+      bookings,
+      search,
+      filter,
+      paymentFilter,
+      courtFilter,
+      bookingDate,
+      sortBy,
+    ])
 
   /* =======================================================
      ACTION HANDLER
@@ -811,6 +1074,7 @@ export default function Reservations() {
                 ? 'Refreshing...'
                 : 'Refresh'}
             </button>
+
           </div>
         </section>
 
@@ -885,73 +1149,305 @@ export default function Reservations() {
         )}
 
         {/* =================================================
-            FILTERS
+            SEARCH & FILTERS
         ================================================= */}
 
-        <section className="mb-6">
-          <div className="flex flex-wrap items-center gap-2">
+        <section className="pr-card mb-6 p-4 sm:p-5">
 
-            {[
-              {
-                value:
-                  'all' as Filter,
-                label: 'All',
-              },
-              {
-                value:
-                  'confirmed' as Filter,
-                label: 'Confirmed',
-              },
-              {
-                value:
-                  'cancelled' as Filter,
-                label: 'Cancelled',
-              },
-            ].map((item) => {
-              const isActive =
-                filter ===
-                item.value
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
-              return (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                Search & Filters
+              </p>
+
+              <p className="mt-1 text-xs text-muted">
+                Find reservations quickly using booking,
+                customer, court, date, or payment details.
+              </p>
+            </div>
+
+            <div className="flex w-full gap-2 sm:w-auto">
+
+              {hasFilters && (
                 <button
-                  key={item.value}
                   type="button"
-                  onClick={() =>
-                    setFilter(
-                      item.value
-                    )
-                  }
-                  className={
-                    'rounded-xl border px-4 py-2.5 text-xs font-semibold transition ' +
-                    (isActive
-                      ? 'border-court/30 bg-court/10 text-court'
-                      : 'border-line bg-surface text-muted hover:border-court/20 hover:text-ink')
-                  }
+                  onClick={clearFilters}
+                  className="flex-1 rounded-xl border border-line bg-paper px-3 py-2.5 text-[10px] font-semibold text-muted transition hover:border-court/20 hover:text-court sm:flex-none"
                 >
-                  {item.label}
-
-                  <span
-                    className={
-                      'ml-2 rounded-full px-1.5 py-0.5 text-[9px] ' +
-                      (isActive
-                        ? 'bg-court/10 text-court'
-                        : 'bg-paper text-muted')
-                    }
-                  >
-                    {item.value ===
-                    'all'
-                      ? bookings.length
-                      : bookings.filter(
-                          (booking) =>
-                            booking.status ===
-                            item.value
-                        ).length}
-                  </span>
+                  Clear
                 </button>
-              )
-            })}
+              )}
 
+              <button
+                type="button"
+                onClick={() =>
+                  setShowFilters(
+                    (current) =>
+                      !current
+                  )
+                }
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-court/30 bg-court/10 px-4 py-2.5 text-[10px] font-bold text-court transition hover:bg-court/15 sm:flex-none"
+              >
+                <span>
+                  ☷
+                </span>
+
+                {showFilters
+                  ? 'Hide Filters'
+                  : 'Filters'}
+              </button>
+
+            </div>
           </div>
+
+          {/* SEARCH ALWAYS VISIBLE */}
+
+          <div className="mt-4">
+            <label
+              htmlFor="reservation-search"
+              className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+            >
+              Search Reservations
+            </label>
+
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">
+                🔎
+              </span>
+
+              <input
+                id="reservation-search"
+                type="text"
+                value={search}
+                onChange={(event) =>
+                  setSearch(
+                    event.target.value
+                  )
+                }
+                placeholder="Booking reference, customer name, phone number, or court..."
+                className="w-full rounded-xl border border-line bg-paper py-3 pl-10 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-court/40"
+              />
+            </div>
+          </div>
+
+          {/* COLLAPSIBLE FILTERS */}
+
+          {showFilters && (
+            <div className="mt-4 border-t border-line pt-4">
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+
+                {/* RESERVATION STATUS */}
+
+                <div>
+                  <label
+                    htmlFor="reservation-status-filter"
+                    className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+                  >
+                    Reservation Status
+                  </label>
+
+                  <select
+                    id="reservation-status-filter"
+                    value={filter}
+                    onChange={(event) =>
+                      setFilter(
+                        event.target
+                          .value as Filter
+                      )
+                    }
+                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
+                  >
+                    <option value="all">
+                      All
+                    </option>
+
+                    <option value="confirmed">
+                      Confirmed
+                    </option>
+
+                    <option value="cancelled">
+                      Cancelled
+                    </option>
+                  </select>
+                </div>
+
+                {/* PAYMENT STATUS */}
+
+                <div>
+                  <label
+                    htmlFor="payment-status-filter"
+                    className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+                  >
+                    Payment Status
+                  </label>
+
+                  <select
+                    id="payment-status-filter"
+                    value={paymentFilter}
+                    onChange={(event) =>
+                      setPaymentFilter(
+                        event.target
+                          .value as PaymentFilter
+                      )
+                    }
+                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
+                  >
+                    <option value="all">
+                      All
+                    </option>
+
+                    <option value="pending">
+                      Pending
+                    </option>
+
+                    <option value="verified">
+                      Verified
+                    </option>
+
+                    <option value="rejected">
+                      Rejected
+                    </option>
+                  </select>
+                </div>
+
+                {/* COURT */}
+
+                <div>
+                  <label
+                    htmlFor="court-filter"
+                    className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+                  >
+                    Court
+                  </label>
+
+                  <select
+                    id="court-filter"
+                    value={courtFilter}
+                    onChange={(event) =>
+                      setCourtFilter(
+                        event.target.value
+                      )
+                    }
+                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
+                  >
+                    <option value="all">
+                      All Courts
+                    </option>
+
+                    {courtOptions.map(
+                      (court) => (
+                        <option
+                          key={court}
+                          value={court}
+                        >
+                          {court}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </div>
+
+                {/* BOOKING DATE */}
+
+                <div>
+                  <label
+                    htmlFor="booking-date-filter"
+                    className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+                  >
+                    Booking Date
+                  </label>
+
+                  <input
+                    id="booking-date-filter"
+                    type="date"
+                    value={bookingDate}
+                    onChange={(event) =>
+                      setBookingDate(
+                        event.target.value
+                      )
+                    }
+                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
+                  />
+                </div>
+
+                {/* SORT */}
+
+                <div>
+                  <label
+                    htmlFor="reservation-sort"
+                    className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+                  >
+                    Sort By
+                  </label>
+
+                  <select
+                    id="reservation-sort"
+                    value={sortBy}
+                    onChange={(event) =>
+                      setSortBy(
+                        event.target
+                          .value as SortOption
+                      )
+                    }
+                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
+                  >
+                    <option value="newest">
+                      Newest Added
+                    </option>
+
+                    <option value="oldest">
+                      Oldest Added
+                    </option>
+
+                    <option value="date_earliest">
+                      Booking Date: Earliest
+                    </option>
+
+                    <option value="date_latest">
+                      Booking Date: Latest
+                    </option>
+
+                    <option value="amount_highest">
+                      Amount: Highest
+                    </option>
+
+                    <option value="amount_lowest">
+                      Amount: Lowest
+                    </option>
+                  </select>
+                </div>
+
+              </div>
+
+              {/* FILTER RESULT */}
+
+              <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+
+                <p className="text-[10px] text-muted">
+                  Showing{' '}
+                  <span className="font-semibold text-ink">
+                    {filteredBookings.length}
+                  </span>{' '}
+                  of{' '}
+                  <span className="font-semibold text-ink">
+                    {bookings.length}
+                  </span>{' '}
+                  bookings
+                </p>
+
+                {hasFilters && (
+                  <span className="inline-flex w-fit rounded-full border border-court/20 bg-court/5 px-2.5 py-1 text-[9px] font-semibold text-court">
+                    Filters active
+                  </span>
+                )}
+
+              </div>
+
+            </div>
+          )}
+
         </section>
 
         {/* =================================================
@@ -1011,9 +1507,20 @@ export default function Reservations() {
               </h2>
 
               <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">
-                There are no bookings matching
-                the selected filter.
+                {hasFilters
+                  ? 'Try adjusting or clearing your search and filters.'
+                  : 'There are currently no reservations.'}
               </p>
+
+              {hasFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="mt-4 rounded-xl border border-court/30 bg-court/10 px-4 py-2.5 text-xs font-semibold text-court transition hover:bg-court/15"
+                >
+                  Clear Filters
+                </button>
+              )}
 
             </div>
           )}
@@ -1920,6 +2427,7 @@ export default function Reservations() {
                       <span className="mr-2 inline-block animate-spin">
                         ↻
                       </span>
+
                       Loading available slots...
                     </div>
                   ) : rescheduleSlots.length ===
@@ -2042,6 +2550,7 @@ export default function Reservations() {
                     </span>
 
                     <div>
+
                       <p className="text-xs font-semibold text-yellow-200">
                         Admin Reschedule
                       </p>
@@ -2049,6 +2558,7 @@ export default function Reservations() {
                       <p className="mt-1 text-[10px] leading-5 text-muted">
                         This will immediately move the booking. The booking reference and verified payment will remain unchanged.
                       </p>
+
                     </div>
 
                   </div>
