@@ -62,7 +62,8 @@ export async function getReservationsForCourtAndDate(
     .select('*')
     .eq('court_id', courtId)
     .eq('date', date)
-    .eq('status', 'confirmed')
+    .in('status', ['confirmed'])
+    .in('payment_status', ['pending', 'verified'])
     .order('start_time', { ascending: true })
 
   if (error) {
@@ -487,11 +488,9 @@ function generateTimeSlots(
   closeTime: string,
   existingReservations: Reservation[]
 ): TimeSlot[] {
-  let openMinutes =
-    timeToMinutes(openTime)
+  let openMinutes = timeToMinutes(openTime)
 
-  let closeMinutes =
-    timeToMinutes(closeTime)
+  let closeMinutes = timeToMinutes(closeTime)
 
   /*
     Overnight schedule example:
@@ -516,37 +515,49 @@ function generateTimeSlots(
     current < closeMinutes;
     current += 60
   ) {
-    const next =
-      Math.min(
-        current + 60,
-        closeMinutes
-      )
+    const next = Math.min(
+      current + 60,
+      closeMinutes
+    )
 
-    const startTime =
-      minutesToTime(current)
+    const startTime = minutesToTime(current)
 
-    const endTime =
-      minutesToTime(next)
+    const endTime = minutesToTime(next)
 
     const reservation =
       existingReservations.find(
         (item) =>
-          timeToMinutes(
-            item.start_time
-          ) ===
-          current %
-            (24 * 60)
+          timeToMinutes(item.start_time) ===
+          current % (24 * 60)
       )
+
+    const isPending =
+      reservation?.payment_status === 'pending'
+
+    const isBooked =
+      reservation?.payment_status === 'verified'
 
     slots.push({
       start_time: startTime,
       end_time: endTime,
+
+      // Both pending and verified bookings
+      // must block the slot.
       available: !reservation,
-      bookedByName:
-        reservation
-          ? reservation.guest_name ||
-            'Member'
-          : undefined,
+
+      // Used by the UI later to distinguish
+      // pending from booked.
+      status: reservation
+        ? isPending
+          ? 'pending'
+          : isBooked
+            ? 'booked'
+            : 'available'
+        : 'available',
+
+      bookedByName: reservation
+        ? reservation.guest_name || 'Member'
+        : undefined,
     })
   }
 
