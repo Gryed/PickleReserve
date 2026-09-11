@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react'
 import {
   getPendingPaymentsAdmin,
@@ -245,15 +246,13 @@ export default function PendingPayments() {
 
       if (action === 'verify') {
         await verifyBookingPayment(
-          booking.booking_reference,
-          booking.firstRow.id
+          booking.booking_reference
         )
       }
 
       if (action === 'reject') {
         await rejectBookingPayment(
-          booking.booking_reference,
-          booking.firstRow.id
+          booking.booking_reference
         )
       }
 

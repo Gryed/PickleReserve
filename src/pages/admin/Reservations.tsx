@@ -304,15 +304,13 @@ export default function Reservations() {
 
       if (action === 'verify') {
         await verifyBookingPayment(
-          booking.booking_reference,
-          booking.firstRow.id
+        booking.booking_reference
         )
       }
 
       if (action === 'reject') {
         await rejectBookingPayment(
-          booking.booking_reference,
-          booking.firstRow.id
+          booking.booking_reference
         )
       }
 

@@ -215,67 +215,54 @@ export async function updateBookingPaymentStatus(
    VERIFY BOOKING PAYMENT
 ========================================================= */
 
-/**
- * Marks the entire booking as payment verified.
- *
- * Reservation status remains CONFIRMED.
- */
 export async function verifyBookingPayment(
-  bookingReference: string | null,
-  reservationId?: string
+  bookingReference: string | null
 ): Promise<void> {
-  await updateBookingPaymentStatus(
-    bookingReference,
-    'verified',
-    reservationId
-  )
-}
+  const reference = bookingReference?.trim()
 
-/* =========================================================
-   REJECT PAYMENT + RELEASE BOOKING
-========================================================= */
-
-/**
- * Rejects payment and cancels the entire booking.
- *
- * This is intentional because:
- *
- * status = confirmed
- *     ↓
- * slot is blocked
- *
- * Therefore rejected payment must become:
- *
- * payment_status = rejected
- * status = cancelled
- *
- * so the slots become available again.
- */
-export async function rejectBookingPayment(
-  bookingReference: string | null,
-  reservationId?: string
-): Promise<void> {
-  let query = supabase
-    .from('reservations')
-    .update({
-      payment_status: 'rejected',
-      status: 'cancelled',
-    })
-
-  if (bookingReference) {
-    query = query.eq(
-      'booking_reference',
-      bookingReference
-    )
-  } else if (reservationId) {
-    query = query.eq('id', reservationId)
-  } else {
+  if (!reference) {
     throw new Error(
-      'Booking reference or reservation ID is required.'
+      'Booking reference is required for payment verification.'
     )
   }
 
-  const { error } = await query
+  const { error } = await supabase.rpc(
+    'verify_booking_payment',
+    {
+      p_booking_reference: reference,
+    }
+  )
+
+  if (error) {
+    console.error(
+      'Error verifying booking payment:',
+      error
+    )
+    throw error
+  }
+}
+
+/* =========================================================
+   REJECT BOOKING PAYMENT
+========================================================= */
+
+export async function rejectBookingPayment(
+  bookingReference: string | null
+): Promise<void> {
+  const reference = bookingReference?.trim()
+
+  if (!reference) {
+    throw new Error(
+      'Booking reference is required for payment rejection.'
+    )
+  }
+
+  const { error } = await supabase.rpc(
+    'reject_booking_payment',
+    {
+      p_booking_reference: reference,
+    }
+  )
 
   if (error) {
     console.error(
