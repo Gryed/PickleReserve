@@ -720,6 +720,168 @@ export async function getReservationsByReference(
   return data ?? []
 }
 
+
+/* =========================================================
+   RESCHEDULE REQUEST
+========================================================= */
+
+export interface RescheduleSlot {
+  court_id: string
+  date: string
+  start_time: string
+  end_time: string
+}
+
+/**
+ * Creates a multi-slot reschedule request.
+ *
+ * The booking remains unchanged until an admin approves
+ * the request.
+ *
+ * The number of requested slots must match the number
+ * of reservation rows in the existing booking.
+ */
+export async function createRescheduleRequest(
+  bookingReference: string,
+  newSlots: RescheduleSlot[]
+): Promise<string> {
+  const reference = bookingReference?.trim()
+
+  if (!reference) {
+    throw new Error(
+      'Booking reference is required for reschedule.'
+    )
+  }
+
+  if (!newSlots.length) {
+    throw new Error(
+      'At least one new time slot is required.'
+    )
+  }
+
+  const { data, error } = await supabase.rpc(
+    'create_reschedule_request_multislot',
+    {
+      p_booking_reference: reference,
+      p_new_slots: newSlots,
+    }
+  )
+
+  if (error) {
+    console.error(
+      'Error creating reschedule request:',
+      error
+    )
+    throw error
+  }
+
+  if (!data) {
+    throw new Error(
+      'Unable to create reschedule request.'
+    )
+  }
+
+  return data as string
+}
+
+/* =========================================================
+   GET CUSTOMER RESCHEDULE REQUESTS
+========================================================= */
+
+export interface RescheduleRequest {
+  id: string
+  booking_reference: string
+
+  old_date: string
+  old_court_id: string
+  old_start_time: string
+  old_end_time: string
+
+  new_date: string
+  new_court_id: string
+  new_start_time: string
+  new_end_time: string
+
+  new_slots: RescheduleSlot[] | null
+
+  status:
+    | 'pending'
+    | 'approved'
+    | 'rejected'
+    | 'cancelled'
+
+  requested_by: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  rejection_reason: string | null
+
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Gets reschedule requests for the currently
+ * authenticated customer.
+ */
+export async function getMyRescheduleRequests(): Promise<
+  RescheduleRequest[]
+> {
+  const { data, error } = await supabase
+    .from('booking_reschedule_requests')
+    .select('*')
+    .order('created_at', {
+      ascending: false,
+    })
+
+  if (error) {
+    console.error(
+      'Error fetching reschedule requests:',
+      error
+    )
+    throw error
+  }
+
+  return (data ?? []) as RescheduleRequest[]
+}
+
+/* =========================================================
+   GET RESCHEDULE REQUEST BY BOOKING
+========================================================= */
+
+export async function getRescheduleRequestByBooking(
+  bookingReference: string
+): Promise<RescheduleRequest | null> {
+  const reference = bookingReference?.trim()
+
+  if (!reference) {
+    return null
+  }
+
+  const { data, error } = await supabase
+    .from('booking_reschedule_requests')
+    .select('*')
+    .eq(
+      'booking_reference',
+      reference
+    )
+    .order('created_at', {
+      ascending: false,
+    })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error(
+      'Error fetching reschedule request:',
+      error
+    )
+    throw error
+  }
+
+  return data as RescheduleRequest | null
+}
+
+
 /* =========================================================
    GENERATE BOOKING REFERENCE
 ========================================================= */
@@ -739,4 +901,50 @@ export async function generateBookingReference(): Promise<string> {
   }
 
   return data
+}
+/* =========================================================
+   ADMIN DIRECT RESCHEDULE
+========================================================= */
+
+export interface AdminRescheduleSlot {
+  court_id: string
+  date: string
+  start_time: string
+  end_time: string
+}
+
+export async function adminRescheduleBooking(
+  bookingReference: string,
+  newSlots: AdminRescheduleSlot[]
+): Promise<void> {
+  const reference = bookingReference?.trim()
+
+  if (!reference) {
+    throw new Error(
+      'Booking reference is required.'
+    )
+  }
+
+  if (!newSlots.length) {
+    throw new Error(
+      'At least one new time slot is required.'
+    )
+  }
+
+  const { error } = await supabase.rpc(
+    'admin_reschedule_booking',
+    {
+      p_booking_reference: reference,
+      p_new_slots: newSlots,
+    }
+  )
+
+  if (error) {
+    console.error(
+      'Error rescheduling booking:',
+      error
+    )
+
+    throw error
+  }
 }
