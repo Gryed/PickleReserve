@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Court, Settings } from '../../types/court'
@@ -78,12 +77,12 @@ function StepHeader({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-court text-sm font-bold text-white shadow-sm">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-court text-sm font-bold text-white shadow-sm">
         {number}
       </div>
 
-      <div>
-        <h2 className="text-base font-semibold text-ink">
+      <div className="min-w-0">
+        <h2 className="text-sm font-bold text-ink sm:text-base">
           {title}
         </h2>
 
@@ -92,6 +91,22 @@ function StepHeader({
         </p>
       </div>
     </div>
+  )
+}
+
+function SectionCard({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <section
+      className={`pr-card overflow-hidden ${className}`}
+    >
+      {children}
+    </section>
   )
 }
 
@@ -493,13 +508,28 @@ export default function CreateBooking() {
       ? selectedCustomer?.username ?? 'No customer selected'
       : guestName.trim() || 'Guest / Walk-in'
 
+  const selectedSlotObjects = useMemo(() => {
+    return [...selectedSlots]
+      .sort((a, b) => a.localeCompare(b))
+      .map((time) => {
+        const slot = slots.find(
+          (item) => item.start_time === time
+        )
+
+        return {
+          time,
+          slot,
+        }
+      })
+  }, [selectedSlots, slots])
+
   if (loading) {
     return (
-      <div className="min-h-[500px] bg-paper">
-        <div className="mx-auto flex min-h-[500px] max-w-6xl items-center justify-center px-4">
+      <div className="pr-page min-h-[500px]">
+        <div className="mx-auto flex min-h-[500px] max-w-7xl items-center justify-center px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-line border-t-court" />
-            <p className="text-sm text-muted">
+            <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-2 border-line border-t-court" />
+            <p className="text-sm font-medium text-muted">
               Loading booking system...
             </p>
           </div>
@@ -509,13 +539,13 @@ export default function CreateBooking() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-paper">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="pr-page min-h-[calc(100vh-64px)]">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
 
-        {/* PAGE HEADER */}
+        {/* HEADER */}
         <div className="mb-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
               <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted">
                 <span>Admin</span>
                 <span>/</span>
@@ -524,7 +554,7 @@ export default function CreateBooking() {
                 </span>
               </div>
 
-              <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+              <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
                 Create Booking
               </h1>
 
@@ -539,9 +569,9 @@ export default function CreateBooking() {
               onClick={() =>
                 navigate('/admin/reservations')
               }
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 py-2.5 text-sm font-medium text-ink shadow-sm transition hover:bg-paper"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition hover:border-court/30 hover:bg-paper"
             >
-              <span>←</span>
+              <span className="text-base">←</span>
               Back to Reservations
             </button>
           </div>
@@ -550,13 +580,18 @@ export default function CreateBooking() {
         {/* ERROR */}
         {error && (
           <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-700">
-            <span className="mt-0.5 font-bold">!</span>
-            <div className="flex-1">{error}</div>
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 font-bold">
+              !
+            </div>
+
+            <div className="flex-1 pt-0.5">
+              {error}
+            </div>
 
             <button
               type="button"
               onClick={() => setError('')}
-              className="font-medium text-red-500 hover:text-red-700"
+              className="rounded-lg px-2 text-lg leading-none text-red-500 transition hover:bg-red-100 hover:text-red-700"
             >
               ×
             </button>
@@ -564,7 +599,7 @@ export default function CreateBooking() {
         )}
 
         {/* PROGRESS */}
-        <div className="mb-6 hidden overflow-hidden rounded-xl border border-line bg-white shadow-sm sm:block">
+        <div className="pr-card mb-6 hidden overflow-hidden sm:block">
           <div className="grid grid-cols-5 divide-x divide-line">
             {[
               ['1', 'Court'],
@@ -575,13 +610,13 @@ export default function CreateBooking() {
             ].map(([number, label]) => (
               <div
                 key={number}
-                className="flex items-center gap-2 px-4 py-3"
+                className="flex items-center gap-3 px-4 py-3.5"
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-court/10 text-xs font-bold text-court">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-court/10 text-xs font-bold text-court">
                   {number}
                 </div>
 
-                <span className="text-xs font-medium text-muted">
+                <span className="text-xs font-semibold text-muted">
                   {label}
                 </span>
               </div>
@@ -589,13 +624,13 @@ export default function CreateBooking() {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_350px]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
 
-          {/* MAIN FORM */}
+          {/* MAIN */}
           <div className="space-y-5">
 
             {/* COURT */}
-            <section className="rounded-2xl border border-line bg-white shadow-sm">
+            <SectionCard>
               <div className="border-b border-line px-5 py-4 sm:px-6">
                 <StepHeader
                   number={1}
@@ -606,10 +641,15 @@ export default function CreateBooking() {
 
               <div className="p-5 sm:p-6">
                 {courts.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-line bg-paper px-4 py-8 text-center">
-                    <p className="text-sm font-medium text-ink">
+                  <div className="rounded-xl border border-dashed border-line bg-paper px-4 py-10 text-center">
+                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-xl shadow-sm">
+                      🏓
+                    </div>
+
+                    <p className="text-sm font-semibold text-ink">
                       No courts found
                     </p>
+
                     <p className="mt-1 text-xs text-muted">
                       Add a court before creating a booking.
                     </p>
@@ -635,37 +675,38 @@ export default function CreateBooking() {
                           key={court.id}
                           type="button"
                           disabled={!available}
-                          onClick={() =>
+                          onClick={() => {
                             setSelectedCourtId(court.id)
-                          }
-                          className={`group relative overflow-hidden rounded-xl border p-4 text-left transition ${
+                            setError('')
+                          }}
+                          className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition ${
                             selected
-                              ? 'border-court bg-court/[0.04] ring-2 ring-court/20'
+                              ? 'border-court bg-court/[0.04] ring-2 ring-court/15'
                               : available
-                                ? 'border-line bg-white hover:border-court/40 hover:bg-paper'
+                                ? 'border-line bg-white hover:-translate-y-0.5 hover:border-court/40 hover:shadow-sm'
                                 : 'cursor-not-allowed border-line bg-paper opacity-60'
                           }`}
                         >
                           {selected && (
-                            <div className="absolute right-0 top-0 rounded-bl-xl bg-court px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                            <div className="absolute right-0 top-0 rounded-bl-xl bg-court px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white">
                               Selected
                             </div>
                           )}
 
                           <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
                               <div
-                                className={`flex h-11 w-11 items-center justify-center rounded-xl text-lg ${
+                                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg transition ${
                                   selected
                                     ? 'bg-court text-white'
-                                    : 'bg-paper text-court'
+                                    : 'bg-paper text-court group-hover:bg-court/10'
                                 }`}
                               >
                                 🏓
                               </div>
 
-                              <div>
-                                <p className="font-semibold text-ink">
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-ink">
                                   {court.name}
                                 </p>
 
@@ -679,7 +720,7 @@ export default function CreateBooking() {
                             </div>
 
                             <span
-                              className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
+                              className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${
                                 available
                                   ? 'bg-green-50 text-green-700'
                                   : 'bg-gray-100 text-gray-500'
@@ -691,13 +732,13 @@ export default function CreateBooking() {
                             </span>
                           </div>
 
-                          <div className="mt-4 flex items-end justify-between">
+                          <div className="mt-4 flex items-end justify-between border-t border-line pt-3">
                             <div>
-                              <p className="text-[11px] text-muted">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
                                 Hourly rate
                               </p>
 
-                              <p className="mt-0.5 text-base font-bold text-ink">
+                              <p className="mt-1 text-base font-bold text-ink">
                                 ₱{displayRate.toLocaleString()}
                                 <span className="ml-1 text-xs font-normal text-muted">
                                   / hour
@@ -706,7 +747,7 @@ export default function CreateBooking() {
                             </div>
 
                             {court.is_24_hours && (
-                              <span className="rounded-full bg-purple-50 px-2 py-1 text-[10px] font-semibold text-purple-700">
+                              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700">
                                 24 Hours
                               </span>
                             )}
@@ -717,10 +758,10 @@ export default function CreateBooking() {
                   </div>
                 )}
               </div>
-            </section>
+            </SectionCard>
 
             {/* DATE */}
-            <section className="rounded-2xl border border-line bg-white shadow-sm">
+            <SectionCard>
               <div className="border-b border-line px-5 py-4 sm:px-6">
                 <StepHeader
                   number={2}
@@ -730,9 +771,9 @@ export default function CreateBooking() {
               </div>
 
               <div className="p-5 sm:p-6">
-                <div className="grid gap-4 sm:grid-cols-[220px_1fr] sm:items-center">
+                <div className="grid gap-4 sm:grid-cols-[230px_minmax(0,1fr)] sm:items-center">
                   <div>
-                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-muted">
+                    <label className="mb-2 block text-[10px] font-bold uppercase tracking-wide text-muted">
                       Play date
                     </label>
 
@@ -750,16 +791,16 @@ export default function CreateBooking() {
                         setSelectedDate(event.target.value)
                         setSelectedSlots([])
                       }}
-                      className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm font-medium text-ink outline-none transition focus:border-court focus:ring-2 focus:ring-court/10"
+                      className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm font-semibold text-ink outline-none transition focus:border-court focus:ring-2 focus:ring-court/10"
                     />
                   </div>
 
-                  <div className="rounded-xl bg-paper px-4 py-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  <div className="rounded-2xl border border-line bg-paper px-4 py-4">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
                       Selected date
                     </p>
 
-                    <p className="mt-1 text-base font-semibold text-ink">
+                    <p className="mt-1 text-sm font-bold text-ink sm:text-base">
                       {formatDisplayDate(selectedDate)}
                     </p>
 
@@ -771,10 +812,10 @@ export default function CreateBooking() {
                   </div>
                 </div>
               </div>
-            </section>
+            </SectionCard>
 
             {/* TIME */}
-            <section className="rounded-2xl border border-line bg-white shadow-sm">
+            <SectionCard>
               <div className="border-b border-line px-5 py-4 sm:px-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <StepHeader
@@ -789,7 +830,7 @@ export default function CreateBooking() {
                       onClick={() =>
                         setSelectedSlots([])
                       }
-                      className="text-xs font-semibold text-red-500 hover:text-red-700"
+                      className="self-start rounded-lg px-2 py-1 text-xs font-bold text-red-500 transition hover:bg-red-50 hover:text-red-700"
                     >
                       Clear selection
                     </button>
@@ -798,66 +839,75 @@ export default function CreateBooking() {
               </div>
 
               <div className="p-5 sm:p-6">
-                {/* QUICK SELECT */}
-                <div className="mb-5">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Quick select
-                  </p>
+                <div className="mb-5 rounded-2xl border border-line bg-paper p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                        Quick select
+                      </p>
 
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      ['one', '1 Hour'],
-                      ['six', '6 Hours'],
-                      ['full', 'Full Day'],
-                    ].map(([value, label]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() =>
-                          selectDuration(
-                            value as 'one' | 'six' | 'full'
-                          )
-                        }
-                        className="rounded-lg border border-line bg-white px-3.5 py-2 text-xs font-semibold text-ink transition hover:border-court/40 hover:bg-paper"
-                      >
-                        {label}
-                      </button>
-                    ))}
+                      <p className="mt-1 text-xs text-muted">
+                        Select a common booking duration.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        ['one', '1 Hour'],
+                        ['six', '6 Hours'],
+                        ['full', 'Full Day'],
+                      ].map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() =>
+                            selectDuration(
+                              value as 'one' | 'six' | 'full'
+                            )
+                          }
+                          className="rounded-xl border border-line bg-white px-3.5 py-2 text-xs font-bold text-ink shadow-sm transition hover:border-court/40 hover:bg-court/5 hover:text-court"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                {/* SLOT LEGEND */}
-                <div className="mb-4 flex flex-wrap items-center gap-4 text-[11px] text-muted">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-white ring-1 ring-line" />
-                    Available
-                  </div>
+                {/* LEGEND */}
+                <div className="mb-4 rounded-xl border border-line bg-white px-3.5 py-3">
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-muted">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-white ring-1 ring-line" />
+                      Available
+                    </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-court" />
-                    Selected
-                  </div>
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-court" />
+                      Selected
+                    </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
-                    Booked
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
+                      Booked
+                    </div>
                   </div>
                 </div>
 
                 {loadingSlots ? (
-                  <div className="rounded-xl bg-paper py-12 text-center">
-                    <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-line border-t-court" />
-                    <p className="text-sm text-muted">
+                  <div className="rounded-2xl bg-paper py-14 text-center">
+                    <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-line border-t-court" />
+                    <p className="text-sm font-medium text-muted">
                       Loading available slots...
                     </p>
                   </div>
                 ) : slots.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-line bg-paper px-4 py-10 text-center">
-                    <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-lg shadow-sm">
+                  <div className="rounded-2xl border border-dashed border-line bg-paper px-4 py-12 text-center">
+                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-lg shadow-sm">
                       🕐
                     </div>
 
-                    <p className="text-sm font-semibold text-ink">
+                    <p className="text-sm font-bold text-ink">
                       No time slots available
                     </p>
 
@@ -883,12 +933,12 @@ export default function CreateBooking() {
                           onClick={() =>
                             toggleSlot(slot)
                           }
-                          className={`rounded-xl border px-3 py-3 text-left transition ${
+                          className={`rounded-xl border px-3.5 py-3 text-left transition ${
                             booked
                               ? 'cursor-not-allowed border-line bg-paper'
                               : selected
                                 ? 'border-court bg-court text-white shadow-sm'
-                                : 'border-line bg-white hover:border-court/40 hover:bg-paper'
+                                : 'border-line bg-white hover:-translate-y-0.5 hover:border-court/40 hover:bg-paper hover:shadow-sm'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2">
@@ -907,14 +957,14 @@ export default function CreateBooking() {
                             </span>
 
                             {selected && (
-                              <span className="text-xs">
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-xs">
                                 ✓
                               </span>
                             )}
                           </div>
 
                           <p
-                            className={`mt-1 text-[11px] ${
+                            className={`mt-1 text-[10px] font-medium ${
                               booked
                                 ? 'text-gray-400'
                                 : selected
@@ -935,9 +985,9 @@ export default function CreateBooking() {
                 )}
 
                 {selectedSlots.length > 0 && (
-                  <div className="mt-4 flex items-center justify-between rounded-xl bg-court/[0.06] px-4 py-3">
+                  <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-court/15 bg-court/[0.05] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-xs font-semibold text-court">
+                      <p className="text-xs font-bold text-court">
                         {selectedSlots.length}{' '}
                         {selectedSlots.length === 1
                           ? 'hour'
@@ -945,21 +995,23 @@ export default function CreateBooking() {
                         selected
                       </p>
 
-                      <p className="mt-0.5 text-[11px] text-muted">
-                        ₱{totalAmount.toLocaleString()} current total
+                      <p className="mt-1 text-[11px] text-muted">
+                        Current total: ₱
+                        {totalAmount.toLocaleString()}
                       </p>
                     </div>
 
-                    <span className="text-sm font-bold text-court">
-                      ✓ Ready
+                    <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 text-[10px] font-bold text-green-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                      Ready
                     </span>
                   </div>
                 )}
               </div>
-            </section>
+            </SectionCard>
 
             {/* CUSTOMER */}
-            <section className="rounded-2xl border border-line bg-white shadow-sm">
+            <SectionCard>
               <div className="border-b border-line px-5 py-4 sm:px-6">
                 <StepHeader
                   number={4}
@@ -975,7 +1027,7 @@ export default function CreateBooking() {
                     onClick={() =>
                       toggleCustomerType('guest')
                     }
-                    className={`rounded-xl border p-4 text-left transition ${
+                    className={`rounded-2xl border p-4 text-left transition ${
                       customerType === 'guest'
                         ? 'border-court bg-court/[0.04] ring-2 ring-court/10'
                         : 'border-line hover:border-court/30 hover:bg-paper'
@@ -984,7 +1036,7 @@ export default function CreateBooking() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                          className={`flex h-10 w-10 items-center justify-center rounded-xl ${
                             customerType === 'guest'
                               ? 'bg-court text-white'
                               : 'bg-paper text-court'
@@ -994,7 +1046,7 @@ export default function CreateBooking() {
                         </div>
 
                         <div>
-                          <p className="text-sm font-semibold text-ink">
+                          <p className="text-sm font-bold text-ink">
                             Guest / Walk-in
                           </p>
 
@@ -1005,7 +1057,7 @@ export default function CreateBooking() {
                       </div>
 
                       {customerType === 'guest' && (
-                        <span className="text-sm font-bold text-court">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-court/10 text-xs font-bold text-court">
                           ✓
                         </span>
                       )}
@@ -1017,7 +1069,7 @@ export default function CreateBooking() {
                     onClick={() =>
                       toggleCustomerType('registered')
                     }
-                    className={`rounded-xl border p-4 text-left transition ${
+                    className={`rounded-2xl border p-4 text-left transition ${
                       customerType === 'registered'
                         ? 'border-court bg-court/[0.04] ring-2 ring-court/10'
                         : 'border-line hover:border-court/30 hover:bg-paper'
@@ -1026,7 +1078,7 @@ export default function CreateBooking() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                          className={`flex h-10 w-10 items-center justify-center rounded-xl ${
                             customerType === 'registered'
                               ? 'bg-court text-white'
                               : 'bg-paper text-court'
@@ -1036,7 +1088,7 @@ export default function CreateBooking() {
                         </div>
 
                         <div>
-                          <p className="text-sm font-semibold text-ink">
+                          <p className="text-sm font-bold text-ink">
                             Registered Customer
                           </p>
 
@@ -1047,7 +1099,7 @@ export default function CreateBooking() {
                       </div>
 
                       {customerType === 'registered' && (
-                        <span className="text-sm font-bold text-court">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-court/10 text-xs font-bold text-court">
                           ✓
                         </span>
                       )}
@@ -1057,10 +1109,20 @@ export default function CreateBooking() {
 
                 {/* GUEST */}
                 {customerType === 'guest' && (
-                  <div className="mt-5 rounded-xl bg-paper p-4">
+                  <div className="mt-5 rounded-2xl border border-line bg-paper p-4">
+                    <div className="mb-4">
+                      <p className="text-xs font-bold text-ink">
+                        Guest information
+                      </p>
+
+                      <p className="mt-1 text-[11px] text-muted">
+                        Enter the customer's contact details.
+                      </p>
+                    </div>
+
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="mb-2 block text-xs font-semibold text-ink">
+                        <label className="mb-2 block text-[10px] font-bold uppercase tracking-wide text-muted">
                           Customer Name
                         </label>
 
@@ -1073,12 +1135,12 @@ export default function CreateBooking() {
                             )
                           }
                           placeholder="Juan Dela Cruz"
-                          className="w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
+                          className="w-full rounded-xl border border-line bg-white px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
                         />
                       </div>
 
                       <div>
-                        <label className="mb-2 block text-xs font-semibold text-ink">
+                        <label className="mb-2 block text-[10px] font-bold uppercase tracking-wide text-muted">
                           Phone Number
                         </label>
 
@@ -1091,7 +1153,7 @@ export default function CreateBooking() {
                             )
                           }
                           placeholder="09XXXXXXXXX"
-                          className="w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
+                          className="w-full rounded-xl border border-line bg-white px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
                         />
                       </div>
                     </div>
@@ -1101,7 +1163,7 @@ export default function CreateBooking() {
                 {/* REGISTERED */}
                 {customerType === 'registered' && (
                   <div className="mt-5">
-                    <label className="mb-2 block text-xs font-semibold text-ink">
+                    <label className="mb-2 block text-[10px] font-bold uppercase tracking-wide text-muted">
                       Search Customer Username
                     </label>
 
@@ -1117,10 +1179,10 @@ export default function CreateBooking() {
                             setSelectedCustomer(null)
                           }}
                           placeholder="Type username..."
-                          className="w-full rounded-xl border border-line bg-white px-4 py-3 pr-10 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
+                          className="w-full rounded-xl border border-line bg-white px-4 py-3 pr-11 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
                         />
 
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted">
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted">
                           {searchingCustomers
                             ? '…'
                             : '⌕'}
@@ -1144,7 +1206,7 @@ export default function CreateBooking() {
 
                       {customerResults.length > 0 &&
                         !selectedCustomer && (
-                          <div className="mt-2 overflow-hidden rounded-xl border border-line bg-white shadow-lg">
+                          <div className="mt-2 overflow-hidden rounded-2xl border border-line bg-white shadow-lg">
                             {customerResults.map(
                               (customer) => (
                                 <button
@@ -1155,17 +1217,17 @@ export default function CreateBooking() {
                                       customer
                                     )
                                   }
-                                  className="flex w-full items-center justify-between border-b border-line px-4 py-3 text-left last:border-b-0 hover:bg-paper"
+                                  className="flex w-full items-center justify-between gap-3 border-b border-line px-4 py-3.5 text-left transition last:border-b-0 hover:bg-paper"
                                 >
-                                  <div className="flex items-center gap-3">
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-court/10 text-xs font-bold text-court">
+                                  <div className="flex min-w-0 items-center gap-3">
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-court/10 text-xs font-bold text-court">
                                       {customer.username
                                         .charAt(0)
                                         .toUpperCase()}
                                     </div>
 
-                                    <div>
-                                      <p className="text-sm font-semibold text-ink">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-bold text-ink">
                                         {customer.username}
                                       </p>
 
@@ -1175,7 +1237,7 @@ export default function CreateBooking() {
                                     </div>
                                   </div>
 
-                                  <span className="text-xs font-semibold text-court">
+                                  <span className="shrink-0 text-xs font-bold text-court">
                                     Select →
                                   </span>
                                 </button>
@@ -1186,20 +1248,20 @@ export default function CreateBooking() {
                     </div>
 
                     {selectedCustomer && (
-                      <div className="mt-4 flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700">
+                      <div className="mt-4 flex items-center justify-between rounded-2xl border border-green-200 bg-green-50 px-4 py-3.5">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700">
                             {selectedCustomer.username
                               .charAt(0)
                               .toUpperCase()}
                           </div>
 
-                          <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-green-600">
                               Selected Customer
                             </p>
 
-                            <p className="mt-0.5 text-sm font-semibold text-green-900">
+                            <p className="mt-0.5 truncate text-sm font-bold text-green-900">
                               {selectedCustomer.username}
                             </p>
                           </div>
@@ -1212,7 +1274,7 @@ export default function CreateBooking() {
                             setCustomerSearch('')
                             setCustomerResults([])
                           }}
-                          className="text-xs font-semibold text-red-600 hover:text-red-700"
+                          className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-red-600 transition hover:bg-red-100 hover:text-red-700"
                         >
                           Change
                         </button>
@@ -1221,10 +1283,10 @@ export default function CreateBooking() {
                   </div>
                 )}
               </div>
-            </section>
+            </SectionCard>
 
             {/* PAYMENT */}
-            <section className="rounded-2xl border border-line bg-white shadow-sm">
+            <SectionCard>
               <div className="border-b border-line px-5 py-4 sm:px-6">
                 <StepHeader
                   number={5}
@@ -1240,15 +1302,15 @@ export default function CreateBooking() {
                     onClick={() =>
                       setPaymentType('full')
                     }
-                    className={`rounded-xl border p-4 text-left transition ${
+                    className={`rounded-2xl border p-4 text-left transition ${
                       paymentType === 'full'
                         ? 'border-court bg-court/[0.04] ring-2 ring-court/10'
                         : 'border-line hover:border-court/30 hover:bg-paper'
                     }`}
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-ink">
+                        <p className="text-sm font-bold text-ink">
                           Full Payment
                         </p>
 
@@ -1258,13 +1320,13 @@ export default function CreateBooking() {
                       </div>
 
                       {paymentType === 'full' && (
-                        <span className="font-bold text-court">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-court/10 text-xs font-bold text-court">
                           ✓
                         </span>
                       )}
                     </div>
 
-                    <p className="mt-4 text-xl font-bold text-ink">
+                    <p className="mt-5 text-xl font-bold text-ink">
                       ₱{totalAmount.toLocaleString()}
                     </p>
                   </button>
@@ -1274,15 +1336,15 @@ export default function CreateBooking() {
                     onClick={() =>
                       setPaymentType('deposit')
                     }
-                    className={`rounded-xl border p-4 text-left transition ${
+                    className={`rounded-2xl border p-4 text-left transition ${
                       paymentType === 'deposit'
                         ? 'border-court bg-court/[0.04] ring-2 ring-court/10'
                         : 'border-line hover:border-court/30 hover:bg-paper'
                     }`}
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-ink">
+                        <p className="text-sm font-bold text-ink">
                           Deposit
                         </p>
 
@@ -1295,80 +1357,79 @@ export default function CreateBooking() {
                       </div>
 
                       {paymentType === 'deposit' && (
-                        <span className="font-bold text-court">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-court/10 text-xs font-bold text-court">
                           ✓
                         </span>
                       )}
                     </div>
 
-                    <p className="mt-4 text-xl font-bold text-ink">
+                    <p className="mt-5 text-xl font-bold text-ink">
                       ₱{depositAmount.toLocaleString()}
                     </p>
                   </button>
                 </div>
 
-                <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-                  <div className="flex gap-3">
-                    <span className="text-blue-600">ⓘ</span>
+                <div className="mt-4 flex gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3.5">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-600">
+                    i
+                  </span>
 
-                    <p className="text-xs leading-5 text-blue-800">
-                      Admin-created bookings are automatically
-                      marked as <strong>verified</strong> and
-                      confirmed immediately.
-                    </p>
-                  </div>
+                  <p className="text-xs leading-5 text-blue-800">
+                    Admin-created bookings are automatically
+                    marked as <strong>verified</strong> and
+                    confirmed immediately.
+                  </p>
                 </div>
               </div>
-            </section>
+            </SectionCard>
           </div>
 
           {/* SUMMARY */}
-          <aside className="lg:block">
-            <div className="lg:sticky lg:top-5">
+          <aside>
+            <div className="xl:sticky xl:top-5">
               <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
 
                 {/* SUMMARY HEADER */}
-                <div className="bg-court px-5 py-5 text-white">
-                  <div className="flex items-center justify-between">
+                <div className="bg-court px-5 py-5 text-white sm:px-6">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/70">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/65">
                         PickleReserve
                       </p>
 
-                      <h2 className="mt-1 text-lg font-bold">
+                      <h2 className="mt-1 font-display text-lg font-bold">
                         Booking Summary
                       </h2>
                     </div>
 
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-lg">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-lg">
                       🏓
                     </div>
                   </div>
                 </div>
 
-                {/* SUMMARY CONTENT */}
-                <div className="p-5">
+                <div className="p-5 sm:p-6">
                   <div className="space-y-5">
 
                     {/* CUSTOMER */}
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
                         Customer
                       </p>
 
                       <div className="mt-2 flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-paper text-sm font-bold text-court">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-paper text-sm font-bold text-court">
                           {customerDisplayName
                             .charAt(0)
                             .toUpperCase()}
                         </div>
 
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-ink">
+                          <p className="truncate text-sm font-bold text-ink">
                             {customerDisplayName}
                           </p>
 
-                          <p className="mt-0.5 text-[11px] text-muted">
+                          <p className="mt-0.5 truncate text-[11px] text-muted">
                             {customerType === 'registered'
                               ? 'Registered customer'
                               : guestPhone.trim() ||
@@ -1380,18 +1441,18 @@ export default function CreateBooking() {
 
                     {/* COURT + DATE */}
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl bg-paper p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      <div className="rounded-xl border border-line bg-paper p-3.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
                           Court
                         </p>
 
-                        <p className="mt-1 text-sm font-bold text-ink">
+                        <p className="mt-1 truncate text-sm font-bold text-ink">
                           {selectedCourt?.name ?? '—'}
                         </p>
                       </div>
 
-                      <div className="rounded-xl bg-paper p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      <div className="rounded-xl border border-line bg-paper p-3.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
                           Date
                         </p>
 
@@ -1403,13 +1464,13 @@ export default function CreateBooking() {
 
                     {/* TIME */}
                     <div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
                           Selected Hours
                         </p>
 
                         {selectedSlots.length > 0 && (
-                          <span className="text-[10px] font-semibold text-court">
+                          <span className="rounded-full bg-court/10 px-2.5 py-1 text-[10px] font-bold text-court">
                             {selectedSlots.length}{' '}
                             {selectedSlots.length === 1
                               ? 'hour'
@@ -1419,44 +1480,33 @@ export default function CreateBooking() {
                       </div>
 
                       {selectedSlots.length === 0 ? (
-                        <div className="mt-2 rounded-xl border border-dashed border-line bg-paper px-3 py-4 text-center">
+                        <div className="mt-2 rounded-xl border border-dashed border-line bg-paper px-3 py-5 text-center">
                           <p className="text-xs text-muted">
                             No time slots selected
                           </p>
                         </div>
                       ) : (
-                        <div className="mt-2 max-h-40 space-y-1.5 overflow-y-auto pr-1">
-                          {[...selectedSlots]
-                            .sort((a, b) =>
-                              a.localeCompare(b)
+                        <div className="mt-2 max-h-44 space-y-1.5 overflow-y-auto pr-1">
+                          {selectedSlotObjects.map(
+                            ({ time, slot }) => (
+                              <div
+                                key={time}
+                                className="flex items-center justify-between rounded-xl border border-line bg-paper px-3 py-2.5"
+                              >
+                                <span className="text-xs font-bold text-ink">
+                                  {formatTime(time)}
+                                </span>
+
+                                <span className="text-[10px] font-medium text-muted">
+                                  {slot
+                                    ? formatTime(
+                                        slot.end_time
+                                      )
+                                    : ''}
+                                </span>
+                              </div>
                             )
-                            .map((time) => {
-                              const slot =
-                                slots.find(
-                                  (item) =>
-                                    item.start_time ===
-                                    time
-                                )
-
-                              return (
-                                <div
-                                  key={time}
-                                  className="flex items-center justify-between rounded-lg bg-paper px-3 py-2"
-                                >
-                                  <span className="text-xs font-semibold text-ink">
-                                    {formatTime(time)}
-                                  </span>
-
-                                  <span className="text-[10px] text-muted">
-                                    {slot
-                                      ? formatTime(
-                                          slot.end_time
-                                        )
-                                      : ''}
-                                  </span>
-                                </div>
-                              )
-                            })}
+                          )}
                         </div>
                       )}
                     </div>
@@ -1468,7 +1518,7 @@ export default function CreateBooking() {
                           Rate
                         </span>
 
-                        <span className="font-medium text-ink">
+                        <span className="font-semibold text-ink">
                           ₱{hourlyRate.toLocaleString()}/hr
                         </span>
                       </div>
@@ -1478,7 +1528,7 @@ export default function CreateBooking() {
                           Duration
                         </span>
 
-                        <span className="font-medium text-ink">
+                        <span className="font-semibold text-ink">
                           {selectedSlots.length}{' '}
                           {selectedSlots.length === 1
                             ? 'hour'
@@ -1491,17 +1541,17 @@ export default function CreateBooking() {
                           Payment
                         </span>
 
-                        <span className="font-medium capitalize text-ink">
+                        <span className="font-semibold capitalize text-ink">
                           {paymentType}
                         </span>
                       </div>
                     </div>
 
                     {/* TOTAL */}
-                    <div className="rounded-xl bg-paper p-4">
-                      <div className="flex items-end justify-between">
+                    <div className="rounded-2xl border border-line bg-paper p-4">
+                      <div className="flex items-end justify-between gap-4">
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
                             Total
                           </p>
 
@@ -1511,7 +1561,7 @@ export default function CreateBooking() {
                         </div>
 
                         <div className="text-right">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
                             Amount due
                           </p>
 
@@ -1522,7 +1572,7 @@ export default function CreateBooking() {
                       </div>
                     </div>
 
-                    {/* CREATE BUTTON */}
+                    {/* CREATE */}
                     <button
                       type="button"
                       disabled={
@@ -1556,12 +1606,13 @@ export default function CreateBooking() {
       {successReference && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+
             <div className="bg-court px-6 py-7 text-center text-white">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-3xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-3xl">
                 ✓
               </div>
 
-              <h2 className="mt-4 text-xl font-bold">
+              <h2 className="mt-4 font-display text-xl font-bold">
                 Booking Created
               </h2>
 
@@ -1571,25 +1622,27 @@ export default function CreateBooking() {
             </div>
 
             <div className="p-6 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted">
                 Booking Reference
               </p>
 
-              <div className="mt-2 rounded-xl border border-dashed border-line bg-paper px-4 py-4">
+              <div className="mt-2 rounded-2xl border border-dashed border-line bg-paper px-4 py-5">
                 <p className="text-2xl font-bold tracking-wider text-ink">
                   {successReference}
                 </p>
               </div>
 
-              <p className="mt-4 text-xs leading-5 text-muted">
-                Save this reference number for finding
-                the reservation later.
-              </p>
+              <div className="mt-4 rounded-xl bg-blue-50 px-4 py-3">
+                <p className="text-xs leading-5 text-blue-800">
+                  Save this reference number for finding
+                  the reservation later.
+                </p>
+              </div>
 
               <button
                 type="button"
                 onClick={closeSuccess}
-                className="mt-5 w-full rounded-xl bg-court px-4 py-3 font-semibold text-white transition hover:opacity-90"
+                className="mt-5 w-full rounded-xl bg-court px-4 py-3 font-bold text-white transition hover:opacity-90"
               >
                 View Reservations
               </button>
