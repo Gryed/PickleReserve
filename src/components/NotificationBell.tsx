@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   getNotifications,
   getUnreadNotificationCount,
@@ -33,7 +34,9 @@ function formatNotificationTime(dateString: string) {
   })
 }
 
-function getNotificationIcon(type: Notification['type']) {
+function getNotificationIcon(
+  type: Notification['type']
+) {
   switch (type) {
     case 'payment_submitted':
       return '₱'
@@ -65,26 +68,41 @@ function getNotificationIcon(type: Notification['type']) {
 export default function NotificationBell({
   userId,
 }: NotificationBellProps) {
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  const navigate = useNavigate()
+
+  const [notifications, setNotifications] =
+    useState<Notification[]>([])
+
   const [unreadCount, setUnreadCount] = useState(0)
+
   const [open, setOpen] = useState(false)
+
   const [loading, setLoading] = useState(true)
 
-  const containerRef = useRef<HTMLDivElement>(null)
+  const containerRef =
+    useRef<HTMLDivElement>(null)
+
+  /*
+  ========================================================
+  LOAD NOTIFICATIONS + REALTIME
+  ========================================================
+  */
 
   useEffect(() => {
     let mounted = true
 
     async function loadNotifications() {
       try {
-        const [items, unread] = await Promise.all([
-          getNotifications(userId),
-          getUnreadNotificationCount(userId),
-        ])
+        const [items, unread] =
+          await Promise.all([
+            getNotifications(userId),
+            getUnreadNotificationCount(userId),
+          ])
 
         if (!mounted) return
 
         setNotifications(items)
+
         setUnreadCount(unread)
       } catch (error) {
         console.error(
@@ -100,26 +118,33 @@ export default function NotificationBell({
 
     loadNotifications()
 
-    const unsubscribe = subscribeToNotifications(
-      userId,
-      (notification) => {
-        if (!mounted) return
+    const unsubscribe =
+      subscribeToNotifications(
+        userId,
+        (notification) => {
+          if (!mounted) return
 
-        setNotifications((current) => {
-          const exists = current.some(
-            (item) => item.id === notification.id
+          setNotifications((current) => {
+            const exists = current.some(
+              (item) =>
+                item.id === notification.id
+            )
+
+            if (exists) {
+              return current
+            }
+
+            return [
+              notification,
+              ...current,
+            ]
+          })
+
+          setUnreadCount(
+            (count) => count + 1
           )
-
-          if (exists) {
-            return current
-          }
-
-          return [notification, ...current]
-        })
-
-        setUnreadCount((count) => count + 1)
-      }
-    )
+        }
+      )
 
     return () => {
       mounted = false
@@ -127,8 +152,16 @@ export default function NotificationBell({
     }
   }, [userId])
 
+  /*
+  ========================================================
+  CLOSE DROPDOWN WHEN CLICKING OUTSIDE
+  ========================================================
+  */
+
   useEffect(() => {
-    function handleOutsideClick(event: MouseEvent) {
+    function handleOutsideClick(
+      event: MouseEvent
+    ) {
       if (
         containerRef.current &&
         !containerRef.current.contains(
@@ -154,12 +187,69 @@ export default function NotificationBell({
     }
   }, [open])
 
+  /*
+  ========================================================
+  NOTIFICATION NAVIGATION
+  ========================================================
+  */
+
+  function navigateFromNotification(
+    notification: Notification
+  ) {
+    switch (notification.type) {
+      /*
+      PAYMENT
+      */
+
+      case 'payment_submitted':
+      case 'pending_payment':
+        navigate('/admin/payments')
+        break
+
+      /*
+      VERIFIED / REJECTED PAYMENT
+      */
+
+      case 'payment_verified':
+      case 'payment_rejected':
+        navigate('/admin/reservations')
+        break
+
+      /*
+      BOOKINGS
+      */
+
+      case 'new_booking':
+      case 'booking_update':
+      case 'booking_reminder':
+      case 'upcoming_reservation':
+        navigate('/admin/reservations')
+        break
+
+      /*
+      DEFAULT
+      */
+
+      default:
+        navigate('/admin')
+        break
+    }
+  }
+
+  /*
+  ========================================================
+  CLICK NOTIFICATION
+  ========================================================
+  */
+
   async function handleNotificationClick(
     notification: Notification
   ) {
     try {
       if (!notification.is_read) {
-        await markNotificationRead(notification.id)
+        await markNotificationRead(
+          notification.id
+        )
 
         setNotifications((current) =>
           current.map((item) =>
@@ -182,7 +272,27 @@ export default function NotificationBell({
         error
       )
     }
+
+    /*
+    Close dropdown first
+    */
+
+    setOpen(false)
+
+    /*
+    Navigate to the related admin page
+    */
+
+    navigateFromNotification(
+      notification
+    )
   }
+
+  /*
+  ========================================================
+  MARK ALL AS READ
+  ========================================================
+  */
 
   async function handleMarkAllRead() {
     if (unreadCount === 0) return
@@ -206,20 +316,33 @@ export default function NotificationBell({
     }
   }
 
+  /*
+  ========================================================
+  RENDER
+  ========================================================
+  */
+
   return (
     <div
       ref={containerRef}
       className="relative"
     >
-      {/* BELL BUTTON */}
+      {/* ==================================================
+          BELL BUTTON
+      ================================================== */}
+
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() =>
+          setOpen((value) => !value)
+        }
         aria-label="Notifications"
         aria-expanded={open}
         className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-lg text-muted transition hover:border-court/40 hover:text-court"
       >
-        <span aria-hidden="true">🔔</span>
+        <span aria-hidden="true">
+          🔔
+        </span>
 
         {unreadCount > 0 && (
           <span className="absolute -right-1 -top-1 flex min-w-5 h-5 items-center justify-center rounded-full bg-court px-1 text-[9px] font-bold text-ink shadow-sm">
@@ -230,10 +353,17 @@ export default function NotificationBell({
         )}
       </button>
 
-      {/* DROPDOWN */}
+      {/* ==================================================
+          NOTIFICATION DROPDOWN
+      ================================================== */}
+
       {open && (
         <div className="absolute right-0 top-12 z-[100] w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-2xl border border-line bg-paper shadow-xl">
-          {/* HEADER */}
+
+          {/* ==================================================
+              HEADER
+          ================================================== */}
+
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <div>
               <h3 className="text-sm font-semibold text-ink">
@@ -250,7 +380,9 @@ export default function NotificationBell({
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={handleMarkAllRead}
+                onClick={
+                  handleMarkAllRead
+                }
                 className="text-[10px] font-medium text-court transition hover:underline"
               >
                 Mark all read
@@ -258,13 +390,24 @@ export default function NotificationBell({
             )}
           </div>
 
-          {/* CONTENT */}
+          {/* ==================================================
+              CONTENT
+          ================================================== */}
+
           <div className="max-h-[420px] overflow-y-auto">
+
+            {/* LOADING */}
+
             {loading ? (
               <div className="px-4 py-8 text-center text-xs text-muted">
                 Loading notifications...
               </div>
-            ) : notifications.length === 0 ? (
+
+            ) : notifications.length ===
+              0 ? (
+
+              /* EMPTY */
+
               <div className="px-4 py-10 text-center">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-surface text-xl">
                   🔔
@@ -278,7 +421,11 @@ export default function NotificationBell({
                   You're all caught up.
                 </p>
               </div>
+
             ) : (
+
+              /* NOTIFICATIONS */
+
               notifications
                 .slice(0, 20)
                 .map((notification) => (
@@ -292,18 +439,26 @@ export default function NotificationBell({
                     }
                     className={
                       'flex w-full gap-3 border-b border-line px-4 py-3 text-left transition last:border-b-0 ' +
-                      (notification.is_read
-                        ? 'bg-paper hover:bg-surface'
-                        : 'bg-court/[0.06] hover:bg-court/[0.10]')
+                      (
+                        notification.is_read
+                          ? 'bg-paper hover:bg-surface'
+                          : 'bg-court/[0.06] hover:bg-court/[0.10]'
+                      )
                     }
                   >
-                    {/* ICON */}
+
+                    {/* ==================================================
+                        ICON
+                    ================================================== */}
+
                     <div
                       className={
                         'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ' +
-                        (notification.is_read
-                          ? 'bg-surface text-muted'
-                          : 'bg-court/15 text-court')
+                        (
+                          notification.is_read
+                            ? 'bg-surface text-muted'
+                            : 'bg-court/15 text-court'
+                        )
                       }
                     >
                       {getNotificationIcon(
@@ -311,15 +466,22 @@ export default function NotificationBell({
                       )}
                     </div>
 
-                    {/* TEXT */}
+                    {/* ==================================================
+                        TEXT
+                    ================================================== */}
+
                     <div className="min-w-0 flex-1">
+
                       <div className="flex items-start justify-between gap-2">
+
                         <p
                           className={
                             'text-xs font-semibold ' +
-                            (notification.is_read
-                              ? 'text-ink'
-                              : 'text-court')
+                            (
+                              notification.is_read
+                                ? 'text-ink'
+                                : 'text-court'
+                            )
                           }
                         >
                           {notification.title}
@@ -328,21 +490,35 @@ export default function NotificationBell({
                         {!notification.is_read && (
                           <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-court" />
                         )}
+
                       </div>
 
                       <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted">
                         {notification.message}
                       </p>
 
+                      {/* BOOKING REFERENCE */}
+
+                      {notification.booking_reference && (
+                        <p className="mt-1 text-[9px] font-medium text-court">
+                          {notification.booking_reference}
+                        </p>
+                      )}
+
+                      {/* TIME */}
+
                       <p className="mt-1.5 text-[9px] text-muted/70">
                         {formatNotificationTime(
                           notification.created_at
                         )}
                       </p>
+
                     </div>
+
                   </button>
                 ))
             )}
+
           </div>
         </div>
       )}
