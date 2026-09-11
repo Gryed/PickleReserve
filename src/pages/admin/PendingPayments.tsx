@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react'
 import {
   getPendingPaymentsAdmin,
@@ -44,6 +43,14 @@ type ActionTarget = {
   booking: BookingGroup
   action: ActionType
 }
+
+type SortOption =
+  | 'newest'
+  | 'oldest'
+  | 'highest'
+  | 'lowest'
+  | 'date_asc'
+  | 'date_desc'
 
 /* =========================================================
    FORMAT HELPERS
@@ -106,10 +113,7 @@ function getCustomerName(row: PendingReservation) {
 function groupReservations(
   rows: PendingReservation[]
 ): BookingGroup[] {
-  const groups = new Map<
-    string,
-    PendingReservation[]
-  >()
+  const groups = new Map<string, PendingReservation[]>()
 
   for (const row of rows) {
     const key =
@@ -136,13 +140,11 @@ function groupReservations(
 
       const firstRow = sortedRows[0]
 
-      const totalAmount =
-        sortedRows.reduce(
-          (total, row) =>
-            total +
-            Number(row.amount_due ?? 0),
-          0
-        )
+      const totalAmount = sortedRows.reduce(
+        (total, row) =>
+          total + Number(row.amount_due ?? 0),
+        0
+      )
 
       return {
         key,
@@ -150,12 +152,10 @@ function groupReservations(
           firstRow.booking_reference,
         rows: sortedRows,
         firstRow,
-        start_time:
-          sortedRows[0].start_time,
+        start_time: sortedRows[0].start_time,
         end_time:
-          sortedRows[
-            sortedRows.length - 1
-          ].end_time,
+          sortedRows[sortedRows.length - 1]
+            .end_time,
         totalAmount,
         slotCount: sortedRows.length,
       }
@@ -177,14 +177,23 @@ export default function PendingPayments() {
   const [actionLoading, setActionLoading] =
     useState(false)
 
-  const [error, setError] =
-    useState('')
+  const [error, setError] = useState('')
 
   const [selectedImage, setSelectedImage] =
     useState<string | null>(null)
 
   const [actionTarget, setActionTarget] =
     useState<ActionTarget | null>(null)
+
+  /* =======================================================
+     SEARCH / SORT
+  ======================================================= */
+
+  const [searchTerm, setSearchTerm] =
+    useState('')
+
+  const [sortBy, setSortBy] =
+    useState<SortOption>('newest')
 
   /* =======================================================
      LOAD PENDING PAYMENTS
@@ -223,10 +232,112 @@ export default function PendingPayments() {
   ======================================================= */
 
   const bookings = useMemo(
-    () =>
-      groupReservations(rows),
+    () => groupReservations(rows),
     [rows]
   )
+
+  /* =======================================================
+     FILTER + SORT
+  ======================================================= */
+
+  const filteredBookings = useMemo(() => {
+    const query = searchTerm
+      .trim()
+      .toLowerCase()
+
+    let result = [...bookings]
+
+    if (query) {
+      result = result.filter((booking) => {
+        const row = booking.firstRow
+
+        const bookingReference =
+          booking.booking_reference
+            ?.toLowerCase() ?? ''
+
+        const customerName =
+          getCustomerName(row).toLowerCase()
+
+        const phone =
+          row.guest_phone?.toLowerCase() ?? ''
+
+        return (
+          bookingReference.includes(query) ||
+          customerName.includes(query) ||
+          phone.includes(query)
+        )
+      })
+    }
+
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'newest': {
+          const aTime = new Date(
+            a.firstRow.created_at
+          ).getTime()
+
+          const bTime = new Date(
+            b.firstRow.created_at
+          ).getTime()
+
+          return bTime - aTime
+        }
+
+        case 'oldest': {
+          const aTime = new Date(
+            a.firstRow.created_at
+          ).getTime()
+
+          const bTime = new Date(
+            b.firstRow.created_at
+          ).getTime()
+
+          return aTime - bTime
+        }
+
+        case 'highest':
+          return b.totalAmount - a.totalAmount
+
+        case 'lowest':
+          return a.totalAmount - b.totalAmount
+
+        case 'date_asc': {
+          const dateCompare =
+            a.firstRow.date.localeCompare(
+              b.firstRow.date
+            )
+
+          if (dateCompare !== 0) {
+            return dateCompare
+          }
+
+          return a.start_time.localeCompare(
+            b.start_time
+          )
+        }
+
+        case 'date_desc': {
+          const dateCompare =
+            b.firstRow.date.localeCompare(
+              a.firstRow.date
+            )
+
+          if (dateCompare !== 0) {
+            return dateCompare
+          }
+
+          return b.start_time.localeCompare(
+            a.start_time
+          )
+        }
+
+        default:
+          return 0
+      }
+    })
+
+    return result
+  }, [bookings, searchTerm, sortBy])
 
   /* =======================================================
      ACTION
@@ -354,6 +465,134 @@ export default function PendingPayments() {
       </div>
 
       {/* ===================================================
+          SEARCH / SORT
+      =================================================== */}
+
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px_auto]">
+          {/* SEARCH */}
+
+          <div>
+            <label
+              htmlFor="payment-search"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500"
+            >
+              Search Payments
+            </label>
+
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                🔎
+              </span>
+
+              <input
+                id="payment-search"
+                type="text"
+                value={searchTerm}
+                onChange={(event) =>
+                  setSearchTerm(
+                    event.target.value
+                  )
+                }
+                placeholder="Booking reference, customer name, or phone..."
+                className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-10 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSearchTerm('')
+                  }
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* SORT */}
+
+          <div>
+            <label
+              htmlFor="payment-sort"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500"
+            >
+              Sort By
+            </label>
+
+            <select
+              id="payment-sort"
+              value={sortBy}
+              onChange={(event) =>
+                setSortBy(
+                  event.target.value as SortOption
+                )
+              }
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="newest">
+                Newest payment submission
+              </option>
+
+              <option value="oldest">
+                Oldest payment submission
+              </option>
+
+              <option value="highest">
+                Highest amount
+              </option>
+
+              <option value="lowest">
+                Lowest amount
+              </option>
+
+              <option value="date_asc">
+                Booking date: Earliest
+              </option>
+
+              <option value="date_desc">
+                Booking date: Latest
+              </option>
+            </select>
+          </div>
+
+          {/* RESULT COUNT */}
+
+          <div className="flex items-end">
+            <div className="w-full rounded-lg bg-gray-50 px-4 py-2.5 text-sm text-gray-600 lg:w-auto">
+              <span className="font-semibold text-gray-900">
+                {filteredBookings.length}
+              </span>
+
+              <span className="mx-1">
+                of
+              </span>
+
+              <span className="font-semibold text-gray-900">
+                {bookings.length}
+              </span>
+
+              <span className="ml-1">
+                bookings
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {searchTerm && (
+          <div className="mt-3 text-xs text-gray-500">
+            Showing results for{' '}
+            <span className="font-semibold text-gray-700">
+              "{searchTerm}"
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ===================================================
           COUNT
       =================================================== */}
 
@@ -385,7 +624,7 @@ export default function PendingPayments() {
       )}
 
       {/* ===================================================
-          EMPTY
+          EMPTY — NO PAYMENTS
       =================================================== */}
 
       {bookings.length === 0 && (
@@ -414,12 +653,44 @@ export default function PendingPayments() {
       )}
 
       {/* ===================================================
+          EMPTY — SEARCH RESULT
+      =================================================== */}
+
+      {bookings.length > 0 &&
+        filteredBookings.length === 0 && (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center">
+            <div className="text-4xl">
+              🔎
+            </div>
+
+            <h2 className="mt-3 text-lg font-semibold text-gray-900">
+              No matching payments
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              No pending payment matches your
+              current search.
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                setSearchTerm('')
+              }
+              className="mt-5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+            >
+              Clear Search
+            </button>
+          </div>
+        )}
+
+      {/* ===================================================
           BOOKINGS
       =================================================== */}
 
-      {bookings.length > 0 && (
+      {filteredBookings.length > 0 && (
         <div className="space-y-4">
-          {bookings.map((booking) => {
+          {filteredBookings.map((booking) => {
             const firstRow =
               booking.firstRow
 

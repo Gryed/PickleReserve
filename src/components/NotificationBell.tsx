@@ -203,7 +203,7 @@ export default function NotificationBell({
 
       case 'payment_submitted':
       case 'pending_payment':
-        navigate('/admin/payments')
+        navigate('/admin/payments/pending')
         break
 
       /*
