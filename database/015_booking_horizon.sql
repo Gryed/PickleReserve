@@ -1,0 +1,1 @@
+alter table settings add column booking_horizon_days int not null default 60;
