@@ -6,9 +6,10 @@ import type { TimeSlot } from '../types/availability'
 import { getCourts, getSettings } from '../services/courtService'
 import {
   getAvailableSlots,
-  createReservation,
   generateBookingReference,
 } from '../services/availabilityService'
+
+import { createBookingAtomic } from '../services/atomicBookingService'
 import { uploadPaymentProof } from '../services/paymentService'
 import { useAuth } from '../context/AuthContext'
 
@@ -216,8 +217,8 @@ export default function Booking() {
     useState<BookingDuration | null>(null)
 
   const [slotFilter, setSlotFilter] = useState<
-    'all' | 'available' | 'booked'
-  >('all')
+  'all' | 'available' | 'pending' | 'booked'
+>('all')
 
   const [paymentType, setPaymentType] =
     useState<'full' | 'deposit'>('full')
@@ -734,31 +735,39 @@ export default function Booking() {
       const reference =
         await generateBookingReference()
 
-      await Promise.all(
-        selectedSlots.map((slot) =>
-          createReservation({
-            court_id: selectedCourtId,
-            user_id: bookAsGuest
-              ? null
-              : user?.id ?? null,
-            guest_name: bookAsGuest
-              ? guestName.trim()
-              : null,
-            guest_phone: bookAsGuest
-              ? guestPhone.trim()
-              : null,
-            date,
-            start_time: slot.start_time,
-            end_time: slot.end_time,
-            status: 'confirmed',
-            payment_type: paymentType,
-            amount_due: amountPerSlot,
-            payment_status: 'pending',
-            payment_proof_url: proofUrl,
-            booking_reference: reference,
-          })
-        )
-      )
+      const reservations = selectedSlots.map(
+  (slot) => ({
+    court_id: selectedCourtId,
+
+    user_id: bookAsGuest
+      ? null
+      : user?.id ?? null,
+
+    guest_name: bookAsGuest
+      ? guestName.trim()
+      : null,
+
+    guest_phone: bookAsGuest
+      ? guestPhone.trim()
+      : null,
+
+    date,
+
+    start_time: slot.start_time,
+
+    end_time: slot.end_time,
+
+    payment_type: paymentType,
+
+    amount_due: amountPerSlot,
+
+    payment_proof_url: proofUrl,
+
+    booking_reference: reference,
+  })
+)
+
+await createBookingAtomic(reservations)
 
       setBookingReference(reference)
       setCopied(false)
@@ -835,26 +844,38 @@ export default function Booking() {
   }
 
   const displayedSlots =
-    slotFilter === 'available'
+  slotFilter === 'available'
+    ? slots.filter(
+        (slot) =>
+          slot.status === 'available' ||
+          (slot.available && !slot.status)
+      )
+    : slotFilter === 'pending'
       ? slots.filter(
-          (slot) => slot.available
+          (slot) => slot.status === 'pending'
         )
       : slotFilter === 'booked'
         ? slots.filter(
-            (slot) => !slot.available
+            (slot) => slot.status === 'booked'
           )
         : slots
 
-  const availableCount =
-    slots.filter(
-      (slot) => slot.available
-    ).length
+const availableCount =
+  slots.filter(
+    (slot) =>
+      slot.status === 'available' ||
+      (slot.available && !slot.status)
+  ).length
 
-  const bookedCount =
-    slots.filter(
-      (slot) => !slot.available
-    ).length
+const pendingCount =
+  slots.filter(
+    (slot) => slot.status === 'pending'
+  ).length
 
+const bookedCount =
+  slots.filter(
+    (slot) => slot.status === 'booked'
+  ).length
   const selectedGroups =
     groupConsecutiveSlots(
       selectedSlots
@@ -1331,19 +1352,23 @@ export default function Booking() {
                     slots.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {[
-                          [
-                            'all',
-                            `All ${slots.length}`,
-                          ],
-                          [
-                            'available',
-                            `Available ${availableCount}`,
-                          ],
-                          [
-                            'booked',
-                            `Booked ${bookedCount}`,
-                          ],
-                        ].map(
+  [
+    'all',
+    `All ${slots.length}`,
+  ],
+  [
+    'available',
+    `Available ${availableCount}`,
+  ],
+  [
+    'pending',
+    `Pending ${pendingCount}`,
+  ],
+  [
+    'booked',
+    `Booked ${bookedCount}`,
+  ],
+].map(
                           ([value, label]) => (
                             <button
                               key={value}
@@ -1353,6 +1378,7 @@ export default function Booking() {
                                   value as
                                     | 'all'
                                     | 'available'
+                                    | 'pending'
                                     | 'booked'
                                 )
                               }
@@ -1561,36 +1587,57 @@ export default function Booking() {
                                 slot.start_time
                             )
 
-                          if (
-                            !slot.available
-                          ) {
-                            return (
-                              <button
-                                key={
-                                  slot.start_time
-                                }
-                                type="button"
-                                disabled
-                                className="flex min-h-[76px] cursor-not-allowed flex-col items-center justify-center rounded-xl border border-red-900/30 bg-red-950/20 px-3 py-3 text-center text-red-400"
-                              >
-                                <span className="text-sm font-semibold line-through">
-                                  {formatTime(
-                                    slot.start_time
-                                  )}
-                                </span>
+                          if (!slot.available) {
+  const isPending =
+    slot.status === 'pending'
 
-                                <span className="text-[11px]">
-                                  {formatTime(
-                                    slot.end_time
-                                  )}
-                                </span>
+  const isBooked =
+    slot.status === 'booked'
 
-                                <span className="mt-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
-                                  Booked
-                                </span>
-                              </button>
-                            )
-                          }
+  return (
+    <button
+      key={slot.start_time}
+      type="button"
+      disabled
+      className={
+        'flex min-h-[76px] cursor-not-allowed flex-col items-center justify-center rounded-xl border px-3 py-3 text-center ' +
+        (
+          isPending
+            ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+            : 'border-red-900/30 bg-red-950/20 text-red-400'
+        )
+      }
+    >
+      <span className="text-sm font-semibold">
+        {formatTime(slot.start_time)}
+      </span>
+
+      <span className="text-[11px] opacity-80">
+        {formatTime(slot.end_time)}
+      </span>
+
+      {isPending && (
+        <span className="mt-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400">
+          Pending
+        </span>
+      )}
+
+      {isBooked && (
+        <>
+          <span className="mt-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-400">
+            Booked
+          </span>
+
+          {slot.bookedByName && (
+            <span className="mt-1 max-w-full truncate text-[9px] text-red-300/80">
+              {slot.bookedByName}
+            </span>
+          )}
+        </>
+      )}
+    </button>
+  )
+}
 
                           return (
                             <button
@@ -1647,21 +1694,26 @@ export default function Booking() {
                     </div>
 
                     <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-4 text-xs text-muted">
-                      <span className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full border border-line bg-paper" />
-                        Available
-                      </span>
+  <span className="flex items-center gap-2">
+    <span className="h-2.5 w-2.5 rounded-full border border-line bg-paper" />
+    Available
+  </span>
 
-                      <span className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-court" />
-                        Selected
-                      </span>
+  <span className="flex items-center gap-2">
+    <span className="h-2.5 w-2.5 rounded-full bg-court" />
+    Selected
+  </span>
 
-                      <span className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                        Booked
-                      </span>
-                    </div>
+  <span className="flex items-center gap-2">
+    <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+    Pending
+  </span>
+
+  <span className="flex items-center gap-2">
+    <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+    Booked
+  </span>
+</div>
 
                     {error && (
                       <div className="mt-4 rounded-xl border border-red-900/30 bg-red-950/20 px-4 py-3">
