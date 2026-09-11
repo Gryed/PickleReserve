@@ -110,6 +110,9 @@ export default function Reports() {
   const [showFilters, setShowFilters] =
     useState(false)
 
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<ReportRow | null>(null)
+
   /* =====================================================
      LOAD REPORT
   ===================================================== */
@@ -777,12 +780,15 @@ export default function Reports() {
                   <option value="all">
                     All Payments
                   </option>
+
                   <option value="pending">
                     Pending ({pendingPaymentCount})
                   </option>
+
                   <option value="verified">
                     Verified ({verifiedPaymentCount})
                   </option>
+
                   <option value="rejected">
                     Rejected ({rejectedPaymentCount})
                   </option>
@@ -806,9 +812,11 @@ export default function Reports() {
                   <option value="all">
                     All Bookings
                   </option>
+
                   <option value="confirmed">
                     Confirmed ({confirmedCount})
                   </option>
+
                   <option value="cancelled">
                     Cancelled ({cancelledCount})
                   </option>
@@ -936,7 +944,7 @@ export default function Reports() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[850px] text-sm">
+                <table className="w-full min-w-[950px] text-sm">
                   <thead className="bg-paper text-muted">
                     <tr className="border-b border-line">
                       <th className="px-4 py-3 text-left text-[9px] font-semibold uppercase tracking-[0.12em]">
@@ -965,6 +973,10 @@ export default function Reports() {
 
                       <th className="px-4 py-3 text-left text-[9px] font-semibold uppercase tracking-[0.12em]">
                         Status
+                      </th>
+
+                      <th className="px-4 py-3 text-center text-[9px] font-semibold uppercase tracking-[0.12em]">
+                        Action
                       </th>
                     </tr>
                   </thead>
@@ -1024,6 +1036,23 @@ export default function Reports() {
                               row.status
                             )}
                           </td>
+
+                          {/* VIEW TRANSACTION */}
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedTransaction(
+                                  row
+                                )
+                              }
+                              aria-label="View transaction"
+                              title="View transaction"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-paper text-sm text-muted transition hover:border-court/30 hover:bg-court/10 hover:text-court"
+                            >
+                              👁
+                            </button>
+                          </td>
                         </tr>
                       )
                     )}
@@ -1044,6 +1073,185 @@ export default function Reports() {
             </section>
           )}
       </div>
+
+      {/* =================================================
+          TRANSACTION VIEW MODAL
+      ================================================= */}
+
+      {selectedTransaction && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={() =>
+            setSelectedTransaction(null)
+          }
+        >
+          <div
+            className="w-full max-w-lg overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+          >
+            {/* MODAL HEADER */}
+            <div className="bg-court px-5 py-5 text-white sm:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/70">
+                    PickleReserve
+                  </p>
+
+                  <h2 className="mt-1 font-display text-xl font-bold">
+                    Transaction Details
+                  </h2>
+
+                  <p className="mt-1 text-xs text-white/70">
+                    Reservation transaction overview
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedTransaction(
+                      null
+                    )
+                  }
+                  aria-label="Close transaction"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-lg text-white transition hover:bg-white/20"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* MODAL BODY */}
+            <div className="p-5 sm:p-6">
+              <div className="mb-5 rounded-xl border border-line bg-paper p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                      Transaction ID
+                    </p>
+
+                    <p className="mt-1 break-all font-mono text-xs font-semibold text-ink">
+                      {selectedTransaction.id}
+                    </p>
+                  </div>
+
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-court/10 text-lg text-court">
+                    👁
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-line bg-paper p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    Date
+                  </p>
+
+                  <p className="mt-1 text-sm font-semibold text-ink">
+                    {formatDate(
+                      selectedTransaction.date
+                    )}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-line bg-paper p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    Time
+                  </p>
+
+                  <p className="mt-1 text-sm font-semibold text-blue-400">
+                    {selectedTransaction.start_time.slice(
+                      0,
+                      5
+                    )}
+                    {' – '}
+                    {selectedTransaction.end_time.slice(
+                      0,
+                      5
+                    )}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-line bg-paper p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    Court
+                  </p>
+
+                  <p className="mt-1 text-sm font-semibold text-ink">
+                    {selectedTransaction.court_name}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-line bg-paper p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    Payment Type
+                  </p>
+
+                  <p className="mt-1 text-sm font-semibold capitalize text-ink">
+                    {selectedTransaction.payment_type}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-line bg-paper p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    Amount
+                  </p>
+
+                  <p className="mt-1 font-display text-xl font-bold text-court">
+                    {selectedTransaction.amount_due !=
+                    null
+                      ? formatCurrency(
+                          Number(
+                            selectedTransaction.amount_due
+                          )
+                        )
+                      : '—'}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-line bg-paper p-4">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    Payment Status
+                  </p>
+
+                  {paymentBadge(
+                    selectedTransaction.payment_status
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-line bg-paper p-4">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  Booking Status
+                </p>
+
+                {bookingBadge(
+                  selectedTransaction.status
+                )}
+              </div>
+
+              {/* FOOTER */}
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedTransaction(
+                      null
+                    )
+                  }
+                  className="w-full rounded-xl border border-line bg-paper px-4 py-3 text-xs font-semibold text-muted transition hover:border-court/20 hover:text-ink sm:w-auto"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
