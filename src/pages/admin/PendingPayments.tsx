@@ -778,8 +778,7 @@ export default function Reservations() {
     search.trim() !== '' ||
     courtFilter !== 'all' ||
     dateFilter !== '' ||
-    statusFilter !== 'all' ||
-    paymentTab !== 'pending' ||
+    statusFilter !== 'all'
     sortBy !== 'newest'
 
   function clearFilters() {
@@ -1710,11 +1709,21 @@ export default function Reservations() {
                   : 'No rejected payments'}
               </h2>
 
-              <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">
-                {bookings.length === 0
-                  ? 'Reservations will appear here once customers make bookings.'
-                  : 'Try changing your search or filters to find the reservation you need.'}
-              </p>
+              <p className="text-sm font-semibold text-ink">
+                  {paymentTab === 'pending'
+                    ? 'No pending payments yet'
+                    : paymentTab === 'verified'
+                      ? 'No verified payments yet'
+                      : 'No rejected payments yet'}
+                </p>
+
+                <p className="mt-1 text-xs text-muted">
+                  {paymentTab === 'pending'
+                    ? 'Pending payment transactions will appear here.'
+                    : paymentTab === 'verified'
+                      ? 'Verified payment transactions will appear here.'
+                      : 'Rejected payment transactions will appear here.'}
+                </p>
 
               {bookings.length > 0 &&
                 hasFilters && (
