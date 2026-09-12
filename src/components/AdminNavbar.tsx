@@ -67,7 +67,7 @@ export default function AdminNavbar() {
 
             <div className="hidden sm:block">
               <p className="font-display text-sm font-bold tracking-tight text-ink">
-                Alex Xamie Pickleball Zone
+                ALEX XAMEI PICKLEBALL ZONE
               </p>
 
               <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-muted">

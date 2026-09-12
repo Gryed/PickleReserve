@@ -22,16 +22,16 @@ export default function Navbar() {
         >
           <img
             src="/images/alexxamie-hero.jpg"
-            alt="Alex Xamie Pickleball Zone"
+            alt="ALEX XAMEI PICKLEBALL ZONE"
             className="h-9 w-9 rounded-xl object-cover"
           />
 
           <div className="leading-tight">
             <p className="font-display text-sm font-bold tracking-tight text-ink sm:text-base">
-              Alex Xamie
+              ALEX XAMEI 
             </p>
             <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted sm:text-[10px]">
-              Pickleball Zone
+              PICKLEBALL ZONE
             </p>
           </div>
         </Link>

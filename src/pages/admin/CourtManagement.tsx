@@ -9,16 +9,17 @@ import {
   getSettings,
   updateSettings,
 } from '../../services/courtService'
+import { useAdminToast } from '../../context/AdminToastContext'
 
 type CourtStatus = Court['status']
 
 export default function CourtManagement() {
+  const { success, error: showError } = useAdminToast()
+
   const [courts, setCourts] = useState<Court[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
 
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
   // Add court
   const [name, setName] = useState('')
@@ -45,7 +46,6 @@ export default function CourtManagement() {
   async function loadData() {
     try {
       setLoading(true)
-      setError('')
 
       const [courtsData, settingsData] = await Promise.all([
         getCourts(),
@@ -57,7 +57,7 @@ export default function CourtManagement() {
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to load court management data.'
@@ -67,19 +67,12 @@ export default function CourtManagement() {
     }
   }
 
-  function clearMessages() {
-    setError('')
-    setSuccess('')
-  }
-
   /* =========================================================
      ADD COURT
   ========================================================= */
 
   async function handleAddCourt(e: React.FormEvent) {
     e.preventDefault()
-
-    clearMessages()
 
     /*
       Validate BEFORE changing submitting state
@@ -90,12 +83,12 @@ export default function CourtManagement() {
     const parsedPrice = parseFloat(price)
 
     if (!trimmedName) {
-      setError('Court name is required.')
+      showError('Court name is required.')
       return
     }
 
     if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
-      setError('Please enter a valid price per hour.')
+      showError('Please enter a valid price per hour.')
       return
     }
 
@@ -122,11 +115,11 @@ export default function CourtManagement() {
 
       await loadData()
 
-      setSuccess('Court added successfully.')
+      success('Court added successfully')
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to add court.'
@@ -141,8 +134,6 @@ export default function CourtManagement() {
   ========================================================= */
 
   function openEditModal(court: Court) {
-    clearMessages()
-
     setEditingCourt(court)
 
     setEditName(court.name)
@@ -185,8 +176,6 @@ export default function CourtManagement() {
 
     if (!editingCourt) return
 
-    clearMessages()
-
     /*
       Validate BEFORE entering saving state
       or sending anything to Supabase.
@@ -202,12 +191,12 @@ export default function CourtManagement() {
         : parseFloat(editWeekendPrice)
 
     if (!trimmedName) {
-      setError('Court name is required.')
+      showError('Court name is required.')
       return
     }
 
     if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
-      setError('Please enter a valid price per hour.')
+      showError('Please enter a valid price per hour.')
       return
     }
 
@@ -219,7 +208,9 @@ export default function CourtManagement() {
         parsedWeekendPrice <= 0
       )
     ) {
-      setError('Please enter a valid weekend price per hour.')
+      showError(
+        'Please enter a valid weekend price per hour.'
+      )
       return
     }
 
@@ -251,11 +242,11 @@ export default function CourtManagement() {
 
       await loadData()
 
-      setSuccess('Court updated successfully.')
+      success('Court updated successfully')
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to update court.'
@@ -273,8 +264,6 @@ export default function CourtManagement() {
     id: string,
     courtName: string
   ) {
-    clearMessages()
-
     const confirmed = confirm(
       `Delete "${courtName}"?\n\nThis action cannot be undone.`
     )
@@ -286,13 +275,11 @@ export default function CourtManagement() {
 
       await loadData()
 
-      setSuccess(
-        `${courtName} deleted successfully.`
-      )
+      success(`${courtName} deleted successfully`)
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to delete court.'
@@ -307,8 +294,6 @@ export default function CourtManagement() {
   async function handleToggleShowType() {
     if (!settings) return
 
-    clearMessages()
-
     try {
       const updated =
         await updateSettings({
@@ -318,15 +303,15 @@ export default function CourtManagement() {
 
       setSettings(updated)
 
-      setSuccess(
+      success(
         updated.show_court_type
-          ? 'Court type is now visible to customers.'
-          : 'Court type is now hidden from customers.'
+          ? 'Court type is now visible to customers'
+          : 'Court type is now hidden from customers'
       )
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to update settings.'
@@ -415,51 +400,6 @@ export default function CourtManagement() {
             in your facility.
           </p>
         </div>
-
-        {/* MESSAGES */}
-        {error && (
-          <div
-            role="alert"
-            className="mb-5 flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400"
-          >
-            <span className="shrink-0">⚠</span>
-
-            <p className="min-w-0 flex-1">
-              {error}
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setError('')}
-              className="shrink-0 text-red-400/70 transition hover:text-red-300"
-              aria-label="Dismiss error"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        {success && (
-          <div
-            role="status"
-            className="mb-5 flex items-start gap-3 rounded-xl border border-court/20 bg-court/10 px-4 py-3 text-sm text-court"
-          >
-            <span className="shrink-0">✓</span>
-
-            <p className="min-w-0 flex-1">
-              {success}
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setSuccess('')}
-              className="shrink-0 text-court/70 transition hover:text-court"
-              aria-label="Dismiss success message"
-            >
-              ×
-            </button>
-          </div>
-        )}
 
         {/* CUSTOMER DISPLAY SETTINGS */}
         {settings && (

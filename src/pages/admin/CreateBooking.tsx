@@ -1400,7 +1400,7 @@ export default function CreateBooking() {
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-whiteblack/65">
-                        Alex Xamie Pickleball Zone
+                        ALEX XAMEI PICKLEBALL ZONE
                       </p>
 
                       <h2 className="mt-1 font-display text-lg font-bold">
