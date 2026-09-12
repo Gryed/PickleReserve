@@ -21,7 +21,7 @@ export default function Navbar() {
           className="flex shrink-0 items-center gap-2"
         >
           <img
-            src="public/images/alexxamie-hero.jpg"
+            src="/images/alexxamie-hero.jpg"
             alt="Alex Xamie Pickleball Zone"
             className="h-9 w-9 rounded-xl object-cover"
           />
