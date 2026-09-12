@@ -372,7 +372,32 @@ export async function getAllReservationsAdmin(): Promise<
 /* =========================================================
    GET BOOKING BY REFERENCE
 ========================================================= */
+/* =========================================================
+   ADMIN RESCHEDULED BOOKING REFERENCES
+========================================================= */
 
+export async function getAdminRescheduledBookingReferences(): Promise<
+  string[]
+> {
+  const { data, error } = await supabase.rpc(
+    'get_admin_rescheduled_booking_references'
+  )
+
+  if (error) {
+    console.error(
+      'Error fetching rescheduled booking references:',
+      error
+    )
+
+    throw error
+  }
+
+  return Array.isArray(data)
+    ? data
+        .map((item) => String(item))
+        .filter(Boolean)
+    : []
+}
 /**
  * Gets every reservation row belonging to one booking.
  *

@@ -13,25 +13,48 @@ interface NotificationBellProps {
   userId: string
 }
 
-function formatNotificationTime(dateString: string) {
+function formatNotificationTime(
+  dateString: string
+) {
   const date = new Date(dateString)
   const now = new Date()
 
-  const diff = now.getTime() - date.getTime()
+  const diff =
+    now.getTime() -
+    date.getTime()
 
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
+  const minutes =
+    Math.floor(diff / 60000)
 
-  if (minutes < 1) return 'Just now'
-  if (minutes < 60) return `${minutes}m ago`
-  if (hours < 24) return `${hours}h ago`
-  if (days < 7) return `${days}d ago`
+  const hours =
+    Math.floor(diff / 3600000)
 
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  })
+  const days =
+    Math.floor(diff / 86400000)
+
+  if (minutes < 1) {
+    return 'Just now'
+  }
+
+  if (minutes < 60) {
+    return `${minutes}m ago`
+  }
+
+  if (hours < 24) {
+    return `${hours}h ago`
+  }
+
+  if (days < 7) {
+    return `${days}d ago`
+  }
+
+  return date.toLocaleDateString(
+    undefined,
+    {
+      month: 'short',
+      day: 'numeric',
+    }
+  )
 }
 
 function getNotificationIcon(
@@ -49,6 +72,12 @@ function getNotificationIcon(
 
     case 'new_booking':
       return '▣'
+
+    case 'booking_cancelled':
+      return '✕'
+
+    case 'booking_rescheduled':
+      return '↻'
 
     case 'booking_reminder':
     case 'upcoming_reservation':
@@ -73,36 +102,36 @@ export default function NotificationBell({
   const [notifications, setNotifications] =
     useState<Notification[]>([])
 
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [unreadCount, setUnreadCount] =
+    useState(0)
 
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] =
+    useState(false)
 
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] =
+    useState(true)
 
   const containerRef =
     useRef<HTMLDivElement>(null)
-
-  /*
-  ========================================================
-  LOAD NOTIFICATIONS + REALTIME
-  ========================================================
-  */
 
   useEffect(() => {
     let mounted = true
 
     async function loadNotifications() {
       try {
-        const [items, unread] =
-          await Promise.all([
-            getNotifications(userId),
-            getUnreadNotificationCount(userId),
-          ])
+        const [
+          items,
+          unread,
+        ] = await Promise.all([
+          getNotifications(userId),
+          getUnreadNotificationCount(
+            userId
+          ),
+        ])
 
         if (!mounted) return
 
         setNotifications(items)
-
         setUnreadCount(unread)
       } catch (error) {
         console.error(
@@ -124,21 +153,25 @@ export default function NotificationBell({
         (notification) => {
           if (!mounted) return
 
-          setNotifications((current) => {
-            const exists = current.some(
-              (item) =>
-                item.id === notification.id
-            )
+          setNotifications(
+            (current) => {
+              const exists =
+                current.some(
+                  (item) =>
+                    item.id ===
+                    notification.id
+                )
 
-            if (exists) {
-              return current
+              if (exists) {
+                return current
+              }
+
+              return [
+                notification,
+                ...current,
+              ]
             }
-
-            return [
-              notification,
-              ...current,
-            ]
-          })
+          )
 
           setUnreadCount(
             (count) => count + 1
@@ -151,12 +184,6 @@ export default function NotificationBell({
       unsubscribe()
     }
   }, [userId])
-
-  /*
-  ========================================================
-  CLOSE DROPDOWN WHEN CLICKING OUTSIDE
-  ========================================================
-  */
 
   useEffect(() => {
     function handleOutsideClick(
@@ -187,72 +214,107 @@ export default function NotificationBell({
     }
   }, [open])
 
-  /*
-  ========================================================
-  NOTIFICATION NAVIGATION
-  ========================================================
-  */
-
   function navigateFromNotification(
     notification: Notification
   ) {
     const reference =
       notification.booking_reference
 
-    switch (notification.type) {
-      /*
-      PAYMENT
-      */
+    const encodedReference =
+      reference
+        ? encodeURIComponent(
+            reference
+          )
+        : ''
+
+    switch (
+      notification.type
+    ) {
+      /* =====================================
+         PAYMENT
+      ===================================== */
 
       case 'payment_submitted':
       case 'pending_payment':
-      case 'payment_verified':
-      case 'payment_rejected':
-        if (reference) {
-          navigate(
-            `/admin/payments/pending?reference=${encodeURIComponent(
-              reference
-            )}`
-          )
-        } else {
-          navigate('/admin/payments/pending')
-        }
+        navigate(
+          `/admin/payments/pending?tab=pending${
+            encodedReference
+              ? `&reference=${encodedReference}`
+              : ''
+          }`
+        )
         break
 
-      /*
-      BOOKINGS
-      */
+      case 'payment_verified':
+        navigate(
+          `/admin/payments/pending?tab=verified${
+            encodedReference
+              ? `&reference=${encodedReference}`
+              : ''
+          }`
+        )
+        break
+
+      case 'payment_rejected':
+        navigate(
+          `/admin/payments/pending?tab=rejected${
+            encodedReference
+              ? `&reference=${encodedReference}`
+              : ''
+          }`
+        )
+        break
+
+      /* =====================================
+         CANCELLED
+      ===================================== */
+
+      case 'booking_cancelled':
+        navigate(
+          `/admin/reservations?tab=cancelled${
+            encodedReference
+              ? `&reference=${encodedReference}`
+              : ''
+          }`
+        )
+        break
+
+      /* =====================================
+         RESCHEDULED
+      ===================================== */
+
+      case 'booking_rescheduled':
+        navigate(
+          `/admin/reservations?tab=rescheduled${
+            encodedReference
+              ? `&reference=${encodedReference}`
+              : ''
+          }`
+        )
+        break
+
+      /* =====================================
+         GENERAL BOOKING
+      ===================================== */
 
       case 'new_booking':
       case 'booking_update':
       case 'booking_reminder':
       case 'upcoming_reservation':
-        if (reference) {
-          navigate(
-            `/admin/reservations?reference=${encodeURIComponent(
-              reference
-            )}`
-          )
-        } else {
-          navigate('/admin/reservations')
-        }
+        navigate(
+          `/admin/reservations${
+            encodedReference
+              ? `?reference=${encodedReference}`
+              : ''
+          }`
+        )
         break
-
-      /*
-      DEFAULT
-      */
 
       default:
         navigate('/admin')
         break
     }
   }
-
-  /*
-  ========================================================
-  CLICK NOTIFICATION
-  ========================================================
-  */
 
   async function handleNotificationClick(
     notification: Notification
@@ -263,19 +325,26 @@ export default function NotificationBell({
           notification.id
         )
 
-        setNotifications((current) =>
-          current.map((item) =>
-            item.id === notification.id
-              ? {
-                  ...item,
-                  is_read: true,
-                }
-              : item
-          )
+        setNotifications(
+          (current) =>
+            current.map(
+              (item) =>
+                item.id ===
+                notification.id
+                  ? {
+                      ...item,
+                      is_read: true,
+                    }
+                  : item
+            )
         )
 
-        setUnreadCount((count) =>
-          Math.max(0, count - 1)
+        setUnreadCount(
+          (count) =>
+            Math.max(
+              0,
+              count - 1
+            )
         )
       }
     } catch (error) {
@@ -285,38 +354,29 @@ export default function NotificationBell({
       )
     }
 
-    /*
-    Close dropdown first
-    */
-
     setOpen(false)
-
-    /*
-    Navigate to the related admin page
-    */
 
     navigateFromNotification(
       notification
     )
   }
 
-  /*
-  ========================================================
-  MARK ALL AS READ
-  ========================================================
-  */
-
   async function handleMarkAllRead() {
-    if (unreadCount === 0) return
+    if (unreadCount === 0) {
+      return
+    }
 
     try {
       await markAllNotificationsRead()
 
-      setNotifications((current) =>
-        current.map((notification) => ({
-          ...notification,
-          is_read: true,
-        }))
+      setNotifications(
+        (current) =>
+          current.map(
+            (notification) => ({
+              ...notification,
+              is_read: true,
+            })
+          )
       )
 
       setUnreadCount(0)
@@ -328,36 +388,22 @@ export default function NotificationBell({
     }
   }
 
-  /*
-  ========================================================
-  CLEAR NOTIFICATIONS
-  ========================================================
-  */
-
   function handleClearNotifications() {
     setNotifications([])
     setUnreadCount(0)
   }
-
-  /*
-  ========================================================
-  RENDER
-  ========================================================
-  */
 
   return (
     <div
       ref={containerRef}
       className="relative"
     >
-      {/* ==================================================
-          BELL BUTTON
-      ================================================== */}
-
       <button
         type="button"
         onClick={() =>
-          setOpen((value) => !value)
+          setOpen(
+            (value) => !value
+          )
         }
         aria-label="Notifications"
         aria-expanded={open}
@@ -376,18 +422,11 @@ export default function NotificationBell({
         )}
       </button>
 
-      {/* ==================================================
-          NOTIFICATION DROPDOWN
-      ================================================== */}
-
       {open && (
         <div className="absolute right-0 top-12 z-[100] w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-2xl border border-line bg-paper shadow-xl">
 
-          {/* ==================================================
-              HEADER
-          ================================================== */}
-
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
+
             <div>
               <h3 className="text-sm font-semibold text-ink">
                 Notifications
@@ -401,7 +440,9 @@ export default function NotificationBell({
             </div>
 
             <div className="flex items-center gap-3">
-              {notifications.length > 0 && (
+
+              {notifications.length >
+                0 && (
                 <button
                   type="button"
                   onClick={
@@ -424,28 +465,21 @@ export default function NotificationBell({
                   Mark all read
                 </button>
               )}
+
             </div>
+
           </div>
 
-          {/* ==================================================
-              CONTENT
-          ================================================== */}
-
           <div className="max-h-[420px] overflow-y-auto">
-
-            {/* LOADING */}
 
             {loading ? (
               <div className="px-4 py-8 text-center text-xs text-muted">
                 Loading notifications...
               </div>
-
             ) : notifications.length ===
               0 ? (
-
-              /* EMPTY */
-
               <div className="px-4 py-10 text-center">
+
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-surface text-xl">
                   🔔
                 </div>
@@ -457,106 +491,102 @@ export default function NotificationBell({
                 <p className="mt-1 text-xs text-muted">
                   You're all caught up.
                 </p>
+
               </div>
-
             ) : (
-
-              /* NOTIFICATIONS */
-
               notifications
                 .slice(0, 20)
-                .map((notification) => (
-                  <button
-                    key={notification.id}
-                    type="button"
-                    onClick={() =>
-                      handleNotificationClick(
-                        notification
-                      )
-                    }
-                    className={
-                      'flex w-full gap-3 border-b border-line px-4 py-3 text-left transition last:border-b-0 ' +
-                      (
-                        notification.is_read
-                          ? 'bg-paper hover:bg-surface'
-                          : 'bg-court/[0.06] hover:bg-court/[0.10]'
-                      )
-                    }
-                  >
-
-                    {/* ==================================================
-                        ICON
-                    ================================================== */}
-
-                    <div
+                .map(
+                  (notification) => (
+                    <button
+                      key={
+                        notification.id
+                      }
+                      type="button"
+                      onClick={() =>
+                        handleNotificationClick(
+                          notification
+                        )
+                      }
                       className={
-                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ' +
+                        'flex w-full gap-3 border-b border-line px-4 py-3 text-left transition last:border-b-0 ' +
                         (
                           notification.is_read
-                            ? 'bg-surface text-muted'
-                            : 'bg-court/15 text-court'
+                            ? 'bg-paper hover:bg-surface'
+                            : 'bg-court/[0.06] hover:bg-court/[0.10]'
                         )
                       }
                     >
-                      {getNotificationIcon(
-                        notification.type
-                      )}
-                    </div>
 
-                    {/* ==================================================
-                        TEXT
-                    ================================================== */}
+                      <div
+                        className={
+                          'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ' +
+                          (
+                            notification.is_read
+                              ? 'bg-surface text-muted'
+                              : 'bg-court/15 text-court'
+                          )
+                        }
+                      >
+                        {getNotificationIcon(
+                          notification.type
+                        )}
+                      </div>
 
-                    <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1">
 
-                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start justify-between gap-2">
 
-                        <p
-                          className={
-                            'text-xs font-semibold ' +
-                            (
-                              notification.is_read
-                                ? 'text-ink'
-                                : 'text-court'
-                            )
+                          <p
+                            className={
+                              'text-xs font-semibold ' +
+                              (
+                                notification.is_read
+                                  ? 'text-ink'
+                                  : 'text-court'
+                              )
+                            }
+                          >
+                            {
+                              notification.title
+                            }
+                          </p>
+
+                          {!notification.is_read && (
+                            <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-court" />
+                          )}
+
+                        </div>
+
+                        <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted">
+                          {
+                            notification.message
                           }
-                        >
-                          {notification.title}
                         </p>
 
-                        {!notification.is_read && (
-                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-court" />
+                        {notification.booking_reference && (
+                          <p className="mt-1 text-[9px] font-medium text-court">
+                            {
+                              notification.booking_reference
+                            }
+                          </p>
                         )}
+
+                        <p className="mt-1.5 text-[9px] text-muted/70">
+                          {formatNotificationTime(
+                            notification.created_at
+                          )}
+                        </p>
 
                       </div>
 
-                      <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted">
-                        {notification.message}
-                      </p>
-
-                      {/* BOOKING REFERENCE */}
-
-                      {notification.booking_reference && (
-                        <p className="mt-1 text-[9px] font-medium text-court">
-                          {notification.booking_reference}
-                        </p>
-                      )}
-
-                      {/* TIME */}
-
-                      <p className="mt-1.5 text-[9px] text-muted/70">
-                        {formatNotificationTime(
-                          notification.created_at
-                        )}
-                      </p>
-
-                    </div>
-
-                  </button>
-                ))
+                    </button>
+                  )
+                )
             )}
 
           </div>
+
         </div>
       )}
     </div>

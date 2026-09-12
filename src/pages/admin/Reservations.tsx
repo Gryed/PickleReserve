@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   adminRescheduleBooking,
   cancelBooking,
@@ -6,6 +11,7 @@ import {
   getAvailableSlots,
   rejectBookingPayment,
   verifyBookingPayment,
+  getAdminRescheduledBookingReferences,
 } from '../../services/availabilityService'
 import { getCourts } from '../../services/courtService'
 import type { Court } from '../../types/court'
@@ -45,7 +51,11 @@ type BookingGroup = {
   status: 'confirmed' | 'cancelled'
 }
 
-type Filter = 'all' | 'confirmed' | 'cancelled'
+type Filter =
+  | 'all'
+  | 'confirmed'
+  | 'rescheduled'
+  | 'cancelled'
 
 type PaymentFilter =
   | 'all'
@@ -89,6 +99,7 @@ function formatTime(time: string) {
   }
 
   const normalizedHour = hour % 24
+
   const suffix =
     normalizedHour >= 12 ? 'PM' : 'AM'
 
@@ -261,8 +272,21 @@ function groupReservations(
 ========================================================= */
 
 export default function Reservations() {
+  const [
+    searchParams,
+    setSearchParams,
+  ] = useSearchParams()
+
   const [rows, setRows] =
     useState<ReservationRow[]>([])
+
+  const [rescheduledReferences, setRescheduledReferences] =
+    useState<Set<string>>(
+      new Set()
+    )
+
+  const [highlightedReference, setHighlightedReference] =
+    useState<string | null>(null)
 
   const [loading, setLoading] =
     useState(true)
@@ -280,8 +304,7 @@ export default function Reservations() {
   const [search, setSearch] =
     useState('')
 
-  const [filter, setFilter] =
-    useState<Filter>('all')
+  const [filter, setFilter] = useState<Filter>('all')
 
   const [paymentFilter, setPaymentFilter] =
     useState<PaymentFilter>('all')
@@ -341,11 +364,20 @@ export default function Reservations() {
       setLoading(true)
       setError('')
 
-      const data =
-        await getAllReservationsAdmin()
+      const [
+        data,
+        rescheduled,
+      ] = await Promise.all([
+        getAllReservationsAdmin(),
+        getAdminRescheduledBookingReferences(),
+      ])
 
       setRows(
         data as ReservationRow[]
+      )
+
+      setRescheduledReferences(
+        new Set(rescheduled)
       )
     } catch (err) {
       console.error(err)
@@ -400,12 +432,114 @@ export default function Reservations() {
   )
 
   /* =======================================================
+     RESCHEDULED CHECK
+  ======================================================= */
+
+  function isBookingRescheduled(
+    booking: BookingGroup
+  ) {
+    const reference =
+      booking.booking_reference
+
+    if (!reference) {
+      return false
+    }
+
+    return (
+      booking.status === 'confirmed' &&
+      rescheduledReferences.has(
+        reference
+      )
+    )
+  }
+
+  /* =======================================================
+     URL NOTIFICATION ROUTING
+  ======================================================= */
+
+  useEffect(() => {
+    const tab =
+      searchParams.get('tab')
+
+    const reference =
+      searchParams.get(
+        'reference'
+      )
+
+    if (
+      tab === 'all' ||
+      tab === 'confirmed' ||
+      tab === 'rescheduled' ||
+      tab === 'cancelled'
+    ) {
+      setFilter(tab)
+    }
+
+    if (reference) {
+      setHighlightedReference(
+        reference
+      )
+    }
+  }, [searchParams])
+
+  /* =======================================================
+     AUTO SCROLL / HIGHLIGHT
+  ======================================================= */
+
+  useEffect(() => {
+    const reference =
+      searchParams.get(
+        'reference'
+      )
+
+    if (!reference) {
+      return
+    }
+
+    const timer =
+      window.setTimeout(() => {
+        const element =
+          document.getElementById(
+            `reservation-${reference}`
+          )
+
+        if (element) {
+          element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          })
+        }
+      }, 200)
+
+    const clearTimer =
+      window.setTimeout(() => {
+        setHighlightedReference(
+          null
+        )
+      }, 5000)
+
+    return () => {
+      window.clearTimeout(
+        timer
+      )
+
+      window.clearTimeout(
+        clearTimer
+      )
+    }
+  }, [
+    searchParams,
+    filteredBookingsLength(bookings),
+  ])
+
+  /* =======================================================
      COURT OPTIONS
   ======================================================= */
 
   const courtOptions =
     useMemo(() => {
-      const names = new Set<string>()
+      const names =
+        new Set<string>()
 
       rows.forEach((row) => {
         if (row.courts?.name) {
@@ -428,12 +562,11 @@ export default function Reservations() {
   ======================================================= */
 
   const hasFilters =
-    search.trim() !== '' ||
-    filter !== 'all' ||
-    paymentFilter !== 'all' ||
-    courtFilter !== 'all' ||
-    bookingDate !== '' ||
-    sortBy !== 'newest'
+  search.trim() !== '' ||
+  paymentFilter !== 'all' ||
+  courtFilter !== 'all' ||
+  bookingDate !== '' ||
+  sortBy !== 'newest'
 
   /* =======================================================
      CLEAR FILTERS
@@ -446,6 +579,32 @@ export default function Reservations() {
     setCourtFilter('all')
     setBookingDate('')
     setSortBy('newest')
+    setHighlightedReference(
+      null
+    )
+    setSearchParams({})
+  }
+
+  /* =======================================================
+     FILTER TAB CHANGE
+  ======================================================= */
+
+  function handleFilterChange(
+    nextFilter: Filter
+  ) {
+    setFilter(nextFilter)
+    setHighlightedReference(
+      null
+    )
+
+    if (nextFilter === 'all') {
+      setSearchParams({})
+      return
+    }
+
+    setSearchParams({
+      tab: nextFilter,
+    })
   }
 
   /* =======================================================
@@ -499,10 +658,20 @@ export default function Reservations() {
                 }
               )
 
+            const rescheduled =
+              isBookingRescheduled(
+                booking
+              )
+
             const matchesStatus =
               filter === 'all' ||
-              booking.status ===
-                filter
+              (
+                filter ===
+                  'rescheduled'
+                  ? rescheduled
+                  : booking.status ===
+                    filter
+              )
 
             const matchesPayment =
               paymentFilter ===
@@ -638,6 +807,7 @@ export default function Reservations() {
       courtFilter,
       bookingDate,
       sortBy,
+      rescheduledReferences,
     ])
 
   /* =======================================================
@@ -678,6 +848,28 @@ export default function Reservations() {
       setActionTarget(null)
 
       await load()
+
+      if (action === 'cancel') {
+        const reference =
+          booking.booking_reference
+
+        setFilter('cancelled')
+
+        if (reference) {
+          setSearchParams({
+            tab: 'cancelled',
+            reference,
+          })
+
+          setHighlightedReference(
+            reference
+          )
+        } else {
+          setSearchParams({
+            tab: 'cancelled',
+          })
+        }
+      }
     } catch (err) {
       console.error(err)
 
@@ -875,6 +1067,9 @@ export default function Reservations() {
       setRescheduleSaving(true)
       setError('')
 
+      const bookingReference =
+        rescheduleBooking.booking_reference
+
       const newSlots =
         selectedRescheduleSlots.map(
           (slot) => ({
@@ -890,7 +1085,7 @@ export default function Reservations() {
         )
 
       await adminRescheduleBooking(
-        rescheduleBooking.booking_reference,
+        bookingReference,
         newSlots
       )
 
@@ -906,6 +1101,23 @@ export default function Reservations() {
       )
 
       await load()
+
+      /*
+       * After a successful admin reschedule,
+       * immediately move to the RESCHEDULED tab
+       * and highlight the booking.
+       */
+      setFilter('rescheduled')
+
+      setSearchParams({
+        tab: 'rescheduled',
+        reference:
+          bookingReference,
+      })
+
+      setHighlightedReference(
+        bookingReference
+      )
     } catch (err) {
       console.error(err)
 
@@ -995,13 +1207,29 @@ export default function Reservations() {
   ======================================================= */
 
   function getStatusBadge(
-    status: BookingGroup['status']
+    booking: BookingGroup
   ) {
-    if (status === 'cancelled') {
+    if (
+      booking.status ===
+      'cancelled'
+    ) {
       return (
         <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-paper px-2.5 py-1 text-[10px] font-semibold text-muted">
           <span className="h-1.5 w-1.5 rounded-full bg-muted" />
           Cancelled
+        </span>
+      )
+    }
+
+    if (
+      isBookingRescheduled(
+        booking
+      )
+    ) {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-court/20 bg-court/10 px-2.5 py-1 text-[10px] font-semibold text-court">
+          <span className="h-1.5 w-1.5 rounded-full bg-court" />
+          Rescheduled
         </span>
       )
     }
@@ -1015,8 +1243,36 @@ export default function Reservations() {
   }
 
   /* =======================================================
-     RENDER
+     TAB COUNTS
   ======================================================= */
+
+  const allCount =
+    bookings.length
+
+  const confirmedCount =
+    bookings.filter(
+      (booking) =>
+        booking.status ===
+          'confirmed' &&
+        !isBookingRescheduled(
+          booking
+        )
+    ).length
+
+  const rescheduledCount =
+    bookings.filter(
+      (booking) =>
+        isBookingRescheduled(
+          booking
+        )
+    ).length
+
+  const cancelledCount =
+    bookings.filter(
+      (booking) =>
+        booking.status ===
+        'cancelled'
+    ).length
 
   return (
     <main className="pr-page">
@@ -1083,7 +1339,7 @@ export default function Reservations() {
         ================================================= */}
 
         {!loading && (
-          <section className="mb-6 grid gap-3 sm:grid-cols-3 sm:gap-4">
+          <section className="mb-6 grid gap-3 sm:grid-cols-4 sm:gap-4">
 
             <div className="pr-card p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
@@ -1092,7 +1348,7 @@ export default function Reservations() {
 
               <div className="mt-1 flex items-end justify-between gap-3">
                 <p className="font-display text-2xl font-bold text-ink">
-                  {bookings.length}
+                  {allCount}
                 </p>
 
                 <span className="text-xs text-muted">
@@ -1108,17 +1364,27 @@ export default function Reservations() {
 
               <div className="mt-1 flex items-end justify-between gap-3">
                 <p className="font-display text-2xl font-bold text-blue-400">
-                  {
-                    bookings.filter(
-                      (booking) =>
-                        booking.status ===
-                        'confirmed'
-                    ).length
-                  }
+                  {confirmedCount}
                 </p>
 
                 <span className="text-xs text-muted">
                   active
+                </span>
+              </div>
+            </div>
+
+            <div className="pr-card p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                Rescheduled
+              </p>
+
+              <div className="mt-1 flex items-end justify-between gap-3">
+                <p className="font-display text-2xl font-bold text-court">
+                  {rescheduledCount}
+                </p>
+
+                <span className="text-xs text-muted">
+                  moved
                 </span>
               </div>
             </div>
@@ -1130,13 +1396,7 @@ export default function Reservations() {
 
               <div className="mt-1 flex items-end justify-between gap-3">
                 <p className="font-display text-2xl font-bold text-muted">
-                  {
-                    bookings.filter(
-                      (booking) =>
-                        booking.status ===
-                        'cancelled'
-                    ).length
-                  }
+                  {cancelledCount}
                 </p>
 
                 <span className="text-xs text-muted">
@@ -1147,6 +1407,107 @@ export default function Reservations() {
 
           </section>
         )}
+
+        {/* =================================================
+            STATUS TABS
+        ================================================= */}
+
+        <section className="mb-6 overflow-x-auto">
+          <div className="flex min-w-max gap-2 rounded-2xl border border-line bg-surface p-2">
+
+            <button
+              type="button"
+              onClick={() =>
+                handleFilterChange(
+                  'all'
+                )
+              }
+              className={
+                'rounded-xl px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.08em] transition ' +
+                (
+                  filter === 'all'
+                    ? 'bg-court text-paper'
+                    : 'text-muted hover:bg-paper hover:text-ink'
+                )
+              }
+            >
+              All
+              <span className="ml-2 opacity-70">
+                {allCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                handleFilterChange(
+                  'confirmed'
+                )
+              }
+              className={
+                'rounded-xl px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.08em] transition ' +
+                (
+                  filter ===
+                  'confirmed'
+                    ? 'bg-blue-400/15 text-blue-400'
+                    : 'text-muted hover:bg-paper hover:text-ink'
+                )
+              }
+            >
+              Confirmed
+              <span className="ml-2 opacity-70">
+                {confirmedCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                handleFilterChange(
+                  'rescheduled'
+                )
+              }
+              className={
+                'rounded-xl px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.08em] transition ' +
+                (
+                  filter ===
+                  'rescheduled'
+                    ? 'bg-court/15 text-court'
+                    : 'text-muted hover:bg-paper hover:text-ink'
+                )
+              }
+            >
+              Rescheduled
+              <span className="ml-2 opacity-70">
+                {rescheduledCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                handleFilterChange(
+                  'cancelled'
+                )
+              }
+              className={
+                'rounded-xl px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.08em] transition ' +
+                (
+                  filter ===
+                  'cancelled'
+                    ? 'bg-muted/15 text-muted'
+                    : 'text-muted hover:bg-paper hover:text-ink'
+                )
+              }
+            >
+              Cancelled
+              <span className="ml-2 opacity-70">
+                {cancelledCount}
+              </span>
+            </button>
+
+          </div>
+        </section>
 
         {/* =================================================
             SEARCH & FILTERS
@@ -1252,7 +1613,7 @@ export default function Reservations() {
                     id="reservation-status-filter"
                     value={filter}
                     onChange={(event) =>
-                      setFilter(
+                      handleFilterChange(
                         event.target
                           .value as Filter
                       )
@@ -1265,6 +1626,10 @@ export default function Reservations() {
 
                     <option value="confirmed">
                       Confirmed
+                    </option>
+
+                    <option value="rescheduled">
+                      Rescheduled
                     </option>
 
                     <option value="cancelled">
@@ -1503,14 +1868,29 @@ export default function Reservations() {
               </div>
 
               <h2 className="mt-4 font-display text-lg font-semibold text-ink">
-                No reservations found
+                {filter ===
+                'rescheduled'
+                  ? 'No rescheduled reservations'
+                  : filter ===
+                    'cancelled'
+                  ? 'No cancelled reservations'
+                  : filter ===
+                    'confirmed'
+                  ? 'No confirmed reservations'
+                  : 'No reservations found'}
               </h2>
 
               <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">
-                {hasFilters
-                  ? 'Try adjusting or clearing your search and filters.'
-                  : 'There are currently no reservations.'}
-              </p>
+  {hasFilters
+    ? 'Try adjusting or clearing your search and filters.'
+    : filter === 'rescheduled'
+      ? 'Rescheduled bookings will appear here.'
+      : filter === 'cancelled'
+        ? 'Cancelled bookings will appear here.'
+        : filter === 'confirmed'
+          ? 'Confirmed bookings will appear here.'
+          : 'There are currently no reservations.'}
+</p>
 
               {hasFilters && (
                 <button
@@ -1547,10 +1927,22 @@ export default function Reservations() {
                       ?.payment_proof_url ??
                     null
 
+                  const isHighlighted =
+                    highlightedReference ===
+                    booking.booking_reference
+
                   return (
                     <article
                       key={booking.key}
-                      className="pr-card overflow-hidden transition duration-200 hover:border-court/20"
+                      id={`reservation-${booking.booking_reference || booking.key}`}
+                      className={
+                        'pr-card overflow-hidden transition duration-200 hover:border-court/20 ' +
+                        (
+                          isHighlighted
+                            ? 'ring-2 ring-court ring-offset-2 ring-offset-paper'
+                            : ''
+                        )
+                      }
                     >
 
                       {/* =================================
@@ -1571,7 +1963,7 @@ export default function Reservations() {
                               </span>
 
                               {getStatusBadge(
-                                booking.status
+                                booking
                               )}
 
                               {getPaymentBadge(
@@ -1875,6 +2267,21 @@ export default function Reservations() {
                           </span>
                         )}
 
+                        {/* RESCHEDULED INFO */}
+
+                        {isBookingRescheduled(
+                          booking
+                        ) && (
+                          <span className="flex items-center gap-2 text-xs text-court">
+
+                            <span className="h-1.5 w-1.5 rounded-full bg-court" />
+
+                            This booking has been
+                            rescheduled.
+
+                          </span>
+                        )}
+
                       </div>
 
                     </article>
@@ -2010,7 +2417,7 @@ export default function Reservations() {
                   </span>
 
                   {getStatusBadge(
-                    actionTarget.booking.status
+                    actionTarget.booking
                   )}
 
                 </div>
@@ -2614,4 +3021,14 @@ export default function Reservations() {
 
     </main>
   )
+}
+
+/* =========================================================
+   HELPER FOR EFFECT DEPENDENCY
+========================================================= */
+
+function filteredBookingsLength(
+  bookings: BookingGroup[]
+) {
+  return bookings.length
 }

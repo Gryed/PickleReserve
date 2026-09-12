@@ -6,6 +6,8 @@ export type NotificationType =
   | 'payment_rejected'
   | 'booking_reminder'
   | 'booking_update'
+  | 'booking_cancelled'
+  | 'booking_rescheduled'
   | 'new_booking'
   | 'pending_payment'
   | 'upcoming_reservation'
@@ -32,13 +34,16 @@ export async function getNotifications(
     .from('notifications')
     .select('*')
     .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .order('created_at', {
+      ascending: false,
+    })
 
   if (error) {
     console.error(
       'Error fetching notifications:',
       error
     )
+
     throw error
   }
 
@@ -66,6 +71,7 @@ export async function getUnreadNotificationCount(
       'Error fetching unread notification count:',
       error
     )
+
     throw error
   }
 
@@ -91,6 +97,7 @@ export async function markNotificationRead(
       'Error marking notification as read:',
       error
     )
+
     throw error
   }
 }
@@ -109,6 +116,7 @@ export async function markAllNotificationsRead(): Promise<void> {
       'Error marking all notifications as read:',
       error
     )
+
     throw error
   }
 }
@@ -126,7 +134,8 @@ export function subscribeToNotifications(
   const channelName =
     `notifications:${userId}:${crypto.randomUUID()}`
 
-  const channel = supabase.channel(channelName)
+  const channel =
+    supabase.channel(channelName)
 
   channel.on(
     'postgres_changes',
