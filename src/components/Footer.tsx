@@ -98,7 +98,7 @@ export default function Footer() {
             {/* BRAND */}
             <div>
               <p className="font-display text-lg font-semibold tracking-tight text-ink">
-                Pickle<span className="text-court">Reserve</span>
+                <span className="text-court">Alex Xamie Pickleball Zone</span>
               </p>
 
               <p className="mt-2 max-w-sm text-xs leading-5 text-muted">
@@ -180,7 +180,7 @@ export default function Footer() {
           {/* COPYRIGHT */}
           <div className="flex flex-col gap-2 text-[10px] text-muted sm:flex-row sm:items-center sm:justify-between">
             <p>
-              © {new Date().getFullYear()} PickleReserve. All rights reserved.
+              © {new Date().getFullYear()} Alex Xamie Pickleball Zone. All rights reserved.
             </p>
 
             <p>
@@ -227,7 +227,7 @@ export default function Footer() {
                 </h2>
 
                 <p className="mt-1 text-xs text-muted">
-                  Sign in to access the PickleReserve admin panel.
+                  Sign in to access the Alex Xamie Pickleball Zone admin panel.
                 </p>
               </div>
 

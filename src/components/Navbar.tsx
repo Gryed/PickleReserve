@@ -18,9 +18,22 @@ export default function Navbar() {
       <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4 sm:px-8">
         <Link
           to="/"
-          className="font-display text-lg font-semibold tracking-tight text-ink"
+          className="flex shrink-0 items-center gap-2"
         >
-          Pickle<span className="text-court">Reserve</span>
+          <img
+            src="public/images/alexxamie-hero.jpg"
+            alt="Alex Xamie Pickleball Zone"
+            className="h-9 w-9 rounded-xl object-cover"
+          />
+
+          <div className="leading-tight">
+            <p className="font-display text-sm font-bold tracking-tight text-ink sm:text-base">
+              Alex Xamie
+            </p>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted sm:text-[10px]">
+              Pickleball Zone
+            </p>
+          </div>
         </Link>
 
         <div className="flex items-center gap-5 text-sm">

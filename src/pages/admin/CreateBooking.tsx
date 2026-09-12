@@ -1396,11 +1396,11 @@ export default function CreateBooking() {
               <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-sm">
 
                 {/* SUMMARY HEADER */}
-                <div className="bg-court px-5 py-5 text-white sm:px-6">
+                <div className="bg-court px-5 py-5 text-black sm:px-6">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/65">
-                        PickleReserve
+                      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-whiteblack/65">
+                        Alex Xamie Pickleball Zone
                       </p>
 
                       <h2 className="mt-1 font-display text-lg font-bold">
