@@ -1,5 +1,11 @@
 
-import { useEffect, useMemo, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   adminRescheduleBooking,
   cancelBooking,
@@ -265,6 +271,20 @@ function groupReservations(
 ========================================================= */
 
 export default function Reservations() {
+  const [searchParams] =
+    useSearchParams()
+
+  const notificationReference =
+    searchParams.get('reference')
+
+  const [highlightedReference, setHighlightedReference] =
+    useState<string | null>(null)
+
+  const highlightTimerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(
+      null
+    )
+
   const [rows, setRows] =
     useState<ReservationRow[]>([])
 
@@ -385,6 +405,40 @@ export default function Reservations() {
     load()
     loadCourts()
   }, [])
+
+  /* =======================================================
+     NOTIFICATION → PAYMENT HIGHLIGHT
+  ======================================================= */
+
+  useEffect(() => {
+    if (!notificationReference) {
+      return
+    }
+
+    setSearch(notificationReference)
+    setHighlightedReference(
+      notificationReference
+    )
+
+    if (highlightTimerRef.current) {
+      clearTimeout(
+        highlightTimerRef.current
+      )
+    }
+
+    highlightTimerRef.current =
+      setTimeout(() => {
+        setHighlightedReference(null)
+      }, 5000)
+
+    return () => {
+      if (highlightTimerRef.current) {
+        clearTimeout(
+          highlightTimerRef.current
+        )
+      }
+    }
+  }, [notificationReference])
 
   /* =======================================================
      GROUP BOOKINGS
@@ -620,6 +674,42 @@ export default function Reservations() {
     ])
 
   /* =======================================================
+     AUTO-SCROLL TO NOTIFICATION TARGET
+  ======================================================= */
+
+  useEffect(() => {
+    if (
+      !highlightedReference ||
+      filteredBookings.length === 0
+    ) {
+      return
+    }
+
+    const target =
+      document.getElementById(
+        `booking-${highlightedReference}`
+      )
+
+    if (!target) {
+      return
+    }
+
+    const timer =
+      setTimeout(() => {
+        target.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        })
+      }, 150)
+
+    return () =>
+      clearTimeout(timer)
+  }, [
+    highlightedReference,
+    filteredBookings,
+  ])
+
+  /* =======================================================
      FILTER COUNTS
   ======================================================= */
 
@@ -677,6 +767,7 @@ export default function Reservations() {
     setStatusFilter('all')
     setPaymentFilter('all')
     setSortBy('newest')
+    setHighlightedReference(null)
   }
 
   /* =======================================================
@@ -1536,10 +1627,26 @@ export default function Reservations() {
                       ?.payment_proof_url ??
                     null
 
+                  const isHighlighted =
+                    highlightedReference ===
+                    booking.booking_reference
+
                   return (
                     <article
+                      id={
+                        booking.booking_reference
+                          ? `booking-${booking.booking_reference}`
+                          : undefined
+                      }
                       key={booking.key}
-                      className="pr-card overflow-hidden transition duration-200 hover:border-court/20"
+                      className={
+                        'pr-card overflow-hidden transition duration-300 ' +
+                        (
+                          isHighlighted
+                            ? 'border-court bg-court/[0.06] shadow-[0_0_0_2px_rgba(163,219,56,0.25),0_0_30px_rgba(163,219,56,0.12)]'
+                            : 'hover:border-court/20'
+                        )
+                      }
                     >
 
                       {/* TOP */}
@@ -1563,6 +1670,13 @@ export default function Reservations() {
 
                               {getPaymentBadge(
                                 booking.payment_status
+                              )}
+
+                              {isHighlighted && (
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-court/30 bg-court/10 px-2.5 py-1 text-[10px] font-bold text-court">
+                                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-court" />
+                                  Notification Match
+                                </span>
                               )}
 
                             </div>

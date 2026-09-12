@@ -196,6 +196,9 @@ export default function NotificationBell({
   function navigateFromNotification(
     notification: Notification
   ) {
+    const reference =
+      notification.booking_reference
+
     switch (notification.type) {
       /*
       PAYMENT
@@ -203,16 +206,17 @@ export default function NotificationBell({
 
       case 'payment_submitted':
       case 'pending_payment':
-        navigate('/admin/payments/pending')
-        break
-
-      /*
-      VERIFIED / REJECTED PAYMENT
-      */
-
       case 'payment_verified':
       case 'payment_rejected':
-        navigate('/admin/reservations')
+        if (reference) {
+          navigate(
+            `/admin/payments/pending?reference=${encodeURIComponent(
+              reference
+            )}`
+          )
+        } else {
+          navigate('/admin/payments/pending')
+        }
         break
 
       /*
@@ -223,7 +227,15 @@ export default function NotificationBell({
       case 'booking_update':
       case 'booking_reminder':
       case 'upcoming_reservation':
-        navigate('/admin/reservations')
+        if (reference) {
+          navigate(
+            `/admin/reservations?reference=${encodeURIComponent(
+              reference
+            )}`
+          )
+        } else {
+          navigate('/admin/reservations')
+        }
         break
 
       /*
@@ -318,6 +330,17 @@ export default function NotificationBell({
 
   /*
   ========================================================
+  CLEAR NOTIFICATIONS
+  ========================================================
+  */
+
+  function handleClearNotifications() {
+    setNotifications([])
+    setUnreadCount(0)
+  }
+
+  /*
+  ========================================================
   RENDER
   ========================================================
   */
@@ -345,7 +368,7 @@ export default function NotificationBell({
         </span>
 
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex min-w-5 h-5 items-center justify-center rounded-full bg-court px-1 text-[9px] font-bold text-ink shadow-sm">
+          <span className="absolute -right-0.5 -top-0.5 flex min-h-[17px] min-w-[17px] items-center justify-center rounded-full bg-court px-1 text-[9px] font-bold text-[#0D1B36]">
             {unreadCount > 99
               ? '99+'
               : unreadCount}
@@ -377,17 +400,31 @@ export default function NotificationBell({
               </p>
             </div>
 
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={
-                  handleMarkAllRead
-                }
-                className="text-[10px] font-medium text-court transition hover:underline"
-              >
-                Mark all read
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {notifications.length > 0 && (
+                <button
+                  type="button"
+                  onClick={
+                    handleClearNotifications
+                  }
+                  className="text-[10px] font-medium text-muted transition hover:text-red-400"
+                >
+                  Clear
+                </button>
+              )}
+
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={
+                    handleMarkAllRead
+                  }
+                  className="text-[10px] font-medium text-court transition hover:underline"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
           </div>
 
           {/* ==================================================
