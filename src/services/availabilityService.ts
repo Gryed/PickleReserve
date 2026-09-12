@@ -394,44 +394,12 @@ export async function getAdminRescheduledBookingReferences(): Promise<
 
   return Array.isArray(data)
     ? data
-        .map((item) => String(item))
-        .filter(Boolean)
+        .map((item) => item?.booking_reference)
+        .filter(
+          (value): value is string =>
+            Boolean(value)
+        )
     : []
-}
-/**
- * Gets every reservation row belonging to one booking.
- *
- * Useful for Admin Reservations and Pending Payments
- * when displaying one multi-hour booking as a single
- * booking card.
- */
-export async function getBookingByReference(
-  bookingReference: string
-): Promise<Reservation[]> {
-  const { data, error } = await supabase
-    .from('reservations')
-    .select(`
-      *,
-      courts (
-        name
-      )
-    `)
-    .eq(
-      'booking_reference',
-      bookingReference
-    )
-    .order('date', { ascending: true })
-    .order('start_time', { ascending: true })
-
-  if (error) {
-    console.error(
-      'Error fetching booking:',
-      error
-    )
-    throw error
-  }
-
-  return data ?? []
 }
 
 /* =========================================================
@@ -965,11 +933,14 @@ export async function adminRescheduleBooking(
   )
 
   if (error) {
-    console.error(
-      'Error rescheduling booking:',
-      error
-    )
+  console.error('RESCHEDULE RPC ERROR')
+  console.error('message:', error.message)
+  console.error('details:', error.details)
+  console.error('hint:', error.hint)
+  console.error('code:', error.code)
+  console.error('full error:', error)
 
-    throw error
-  }
+  throw error
+}
+  
 }
