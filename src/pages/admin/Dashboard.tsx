@@ -236,9 +236,9 @@ export default function Dashboard() {
               <Link
                 key={item.to}
                 to={item.to}
-                className="group pr-card p-4 transition duration-200 hover:-translate-y-0.5 hover:border-court/30 hover:shadow-lg sm:p-5"
+               className="group flex h-full min-h-[150px] flex-col pr-card p-4 transition duration-200 hover:-translate-y-0.5 hover:border-court/30 hover:shadow-lg sm:min-h-[165px] sm:p-5"
               >
-                <div className="flex items-start gap-3.5 sm:gap-4">
+                <div className="flex h-full items-start gap-3.5 sm:gap-4">
 
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-paper text-base text-court transition group-hover:border-court/30 group-hover:bg-court group-hover:text-paper">
                     {item.icon}
