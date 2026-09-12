@@ -5,6 +5,7 @@ import {
   getOperatingHours,
   updateOperatingHours,
 } from '../../services/availabilityService'
+import { useAdminToast } from '../../context/AdminToastContext'
 
 const DAY_NAMES = [
   'Sunday',
@@ -17,10 +18,10 @@ const DAY_NAMES = [
 ]
 
 export default function OperatingHoursPage() {
+  const { success, error: showError } = useAdminToast()
+
   const [hours, setHours] = useState<OperatingHours[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
   const [savingDay, setSavingDay] = useState<number | null>(null)
 
   useEffect(() => {
@@ -30,7 +31,6 @@ export default function OperatingHoursPage() {
   async function loadHours() {
     try {
       setLoading(true)
-      setError('')
 
       const data = await getOperatingHours()
 
@@ -38,7 +38,7 @@ export default function OperatingHoursPage() {
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to load operating hours'
@@ -46,11 +46,6 @@ export default function OperatingHoursPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  function clearMessages() {
-    setError('')
-    setSuccess('')
   }
 
   async function handleUpdate(
@@ -63,8 +58,6 @@ export default function OperatingHoursPage() {
     )
 
     if (!currentDay) return
-
-    clearMessages()
 
     /*
      * Validate time before saving.
@@ -92,14 +85,14 @@ export default function OperatingHoursPage() {
         openMinutes === null ||
         closeMinutes === null
       ) {
-        setError(
+        showError(
           `${DAY_NAMES[dayOfWeek]} has an invalid time.`
         )
         return
       }
 
       if (closeMinutes <= openMinutes) {
-        setError(
+        showError(
           `${DAY_NAMES[dayOfWeek]} closing time must be later than opening time.`
         )
         return
@@ -124,13 +117,13 @@ export default function OperatingHoursPage() {
         )
       )
 
-      setSuccess(
-        `${DAY_NAMES[dayOfWeek]} updated successfully.`
+      success(
+        `${DAY_NAMES[dayOfWeek]} updated successfully`
       )
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to update operating hours'
@@ -229,60 +222,6 @@ export default function OperatingHoursPage() {
             for your pickleball courts.
           </p>
         </section>
-
-        {/* MESSAGES */}
-
-        {error && (
-          <div
-            role="alert"
-            className="mb-5 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-300"
-          >
-            <div className="flex items-start gap-3">
-              <span className="shrink-0">
-                ⚠
-              </span>
-
-              <p className="min-w-0 flex-1">
-                {error}
-              </p>
-
-              <button
-                type="button"
-                onClick={() => setError('')}
-                className="shrink-0 text-red-300/70 transition hover:text-red-300"
-                aria-label="Dismiss error"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        )}
-
-        {success && (
-          <div
-            role="status"
-            className="mb-5 rounded-xl border border-court/20 bg-court/10 px-4 py-3 text-sm text-court"
-          >
-            <div className="flex items-start gap-3">
-              <span className="shrink-0">
-                ✓
-              </span>
-
-              <p className="min-w-0 flex-1">
-                {success}
-              </p>
-
-              <button
-                type="button"
-                onClick={() => setSuccess('')}
-                className="shrink-0 text-court/70 transition hover:text-court"
-                aria-label="Dismiss success message"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* INFO */}
 
