@@ -102,9 +102,7 @@ function SectionCard({
   className?: string
 }) {
   return (
-    <section
-      className={`pr-card overflow-hidden ${className}`}
-    >
+    <section className={`pr-card overflow-hidden ${className}`}>
       {children}
     </section>
   )
@@ -191,17 +189,16 @@ export default function CreateBooking() {
       setLoading(true)
       setError('')
 
-      const [courtsData, settingsData] =
-        await Promise.all([
-          getCourts(),
-          getSettings(),
-        ])
+      const [courtsData, settingsData] = await Promise.all([
+        getCourts(),
+        getSettings(),
+      ])
 
       setCourts(courtsData)
       setSettings(settingsData)
 
       const firstAvailable = courtsData.find(
-        (court: Court) => court.status === 'available'
+        (court: Court) => court.status === 'available',
       )
 
       if (firstAvailable) {
@@ -223,7 +220,7 @@ export default function CreateBooking() {
 
       const data = await getAvailableSlots(
         selectedCourtId,
-        selectedDate
+        selectedDate,
       )
 
       setSlots(data)
@@ -239,14 +236,14 @@ export default function CreateBooking() {
   const selectedCourt = useMemo(
     () =>
       courts.find(
-        (court) => court.id === selectedCourtId
+        (court) => court.id === selectedCourtId,
       ),
-    [courts, selectedCourtId]
+    [courts, selectedCourtId],
   )
 
   const isWeekend = useMemo(() => {
     const date = new Date(
-      `${selectedDate}T00:00:00`
+      `${selectedDate}T00:00:00`,
     )
 
     const day = date.getDay()
@@ -263,7 +260,7 @@ export default function CreateBooking() {
       selectedCourt.weekend_price_per_hour
     ) {
       return Number(
-        selectedCourt.weekend_price_per_hour
+        selectedCourt.weekend_price_per_hour,
       )
     }
 
@@ -276,7 +273,7 @@ export default function CreateBooking() {
 
   const depositAmount = useMemo(() => {
     const percentage = Number(
-      settings?.deposit_percentage ?? 50
+      settings?.deposit_percentage ?? 50,
     )
 
     return totalAmount * (percentage / 100)
@@ -288,7 +285,7 @@ export default function CreateBooking() {
       : totalAmount
 
   function toggleCustomerType(
-    type: 'guest' | 'registered'
+    type: 'guest' | 'registered',
   ) {
     setCustomerType(type)
     setError('')
@@ -314,7 +311,7 @@ export default function CreateBooking() {
     setSelectedSlots((current) => {
       if (current.includes(slot.start_time)) {
         return current.filter(
-          (time) => time !== slot.start_time
+          (time) => time !== slot.start_time,
         )
       }
 
@@ -326,19 +323,18 @@ export default function CreateBooking() {
   }
 
   function selectDuration(
-    duration: 'one' | 'six' | 'full'
+    duration: 'one' | 'six' | 'full',
   ) {
     const availableSlots = slots.filter(
-      (slot) => slot.available
+      (slot) => slot.available,
     )
 
     if (duration === 'one') {
       setSelectedSlots(
         availableSlots.length > 0
           ? [availableSlots[0].start_time]
-          : []
+          : [],
       )
-
       return
     }
 
@@ -346,16 +342,15 @@ export default function CreateBooking() {
       setSelectedSlots(
         availableSlots
           .slice(0, 6)
-          .map((slot) => slot.start_time)
+          .map((slot) => slot.start_time),
       )
-
       return
     }
 
     setSelectedSlots(
       availableSlots.map(
-        (slot) => slot.start_time
-      )
+        (slot) => slot.start_time,
+      ),
     )
   }
 
@@ -408,18 +403,18 @@ export default function CreateBooking() {
       const latestSlots =
         await getAvailableSlots(
           selectedCourtId,
-          selectedDate
+          selectedDate,
         )
 
       for (const selectedTime of selectedSlots) {
         const latestSlot = latestSlots.find(
           (slot) =>
-            slot.start_time === selectedTime
+            slot.start_time === selectedTime,
         )
 
         if (!latestSlot?.available) {
           throw new Error(
-            `The ${formatTime(selectedTime)} slot is no longer available.`
+            `The ${formatTime(selectedTime)} slot is no longer available.`,
           )
         }
       }
@@ -428,18 +423,18 @@ export default function CreateBooking() {
         await generateBookingReference()
 
       const sortedSlots = [...selectedSlots].sort(
-        (a, b) => a.localeCompare(b)
+        (a, b) => a.localeCompare(b),
       )
 
       for (const startTime of sortedSlots) {
         const slot = latestSlots.find(
           (item) =>
-            item.start_time === startTime
+            item.start_time === startTime,
         )
 
         if (!slot || !slot.available) {
           throw new Error(
-            'One or more selected slots are no longer available.'
+            'One or more selected slots are no longer available.',
           )
         }
 
@@ -491,7 +486,7 @@ export default function CreateBooking() {
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to create booking.'
+          : 'Failed to create booking.',
       )
     } finally {
       setSubmitting(false)
@@ -513,7 +508,7 @@ export default function CreateBooking() {
       .sort((a, b) => a.localeCompare(b))
       .map((time) => {
         const slot = slots.find(
-          (item) => item.start_time === time
+          (item) => item.start_time === time,
         )
 
         return {
@@ -529,6 +524,7 @@ export default function CreateBooking() {
         <div className="mx-auto flex min-h-[500px] max-w-7xl items-center justify-center px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-2 border-line border-t-court" />
+
             <p className="text-sm font-medium text-muted">
               Loading booking system...
             </p>
@@ -569,7 +565,7 @@ export default function CreateBooking() {
               onClick={() =>
                 navigate('/admin/reservations')
               }
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition hover:border-court/30 hover:bg-paper"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition hover:border-court/30 hover:bg-surface-elevated"
             >
               <span className="text-base">←</span>
               Back to Reservations
@@ -579,8 +575,8 @@ export default function CreateBooking() {
 
         {/* ERROR */}
         {error && (
-          <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-700">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 font-bold">
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3.5 text-sm text-red-300">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500/15 font-bold">
               !
             </div>
 
@@ -591,7 +587,7 @@ export default function CreateBooking() {
             <button
               type="button"
               onClick={() => setError('')}
-              className="rounded-lg px-2 text-lg leading-none text-red-500 transition hover:bg-red-100 hover:text-red-700"
+              className="rounded-lg px-2 text-lg leading-none text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
             >
               ×
             </button>
@@ -642,7 +638,7 @@ export default function CreateBooking() {
               <div className="p-5 sm:p-6">
                 {courts.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-line bg-paper px-4 py-10 text-center">
-                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-surface-elevated text-xl shadow-sm">
+                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-surface-elevated text-xl">
                       🏓
                     </div>
 
@@ -667,7 +663,9 @@ export default function CreateBooking() {
                         isWeekend &&
                         court.weekend_pricing_enabled &&
                         court.weekend_price_per_hour
-                          ? Number(court.weekend_price_per_hour)
+                          ? Number(
+                              court.weekend_price_per_hour,
+                            )
                           : Number(court.price_per_hour)
 
                       return (
@@ -681,10 +679,10 @@ export default function CreateBooking() {
                           }}
                           className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition ${
                             selected
-                                ? 'border-court bg-court/[0.04] ring-2 ring-court/15'
-                                : available
-                                  ? 'border-line bg-surface hover:-translate-y-0.5 hover:border-court/40 hover:shadow-sm'
-                                  : 'cursor-not-allowed border-line bg-paper opacity-60'
+                              ? 'border-court bg-court/[0.04] ring-2 ring-court/15'
+                              : available
+                                ? 'border-line bg-surface hover:-translate-y-0.5 hover:border-court/40 hover:shadow-sm'
+                                : 'cursor-not-allowed border-line bg-paper opacity-60'
                           }`}
                         >
                           {selected && (
@@ -722,8 +720,8 @@ export default function CreateBooking() {
                             <span
                               className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${
                                 available
-                                  ? 'bg-green-50 text-green-700'
-                                  : 'bg-gray-100 text-gray-500'
+                                  ? 'bg-green-500/10 text-green-300'
+                                  : 'bg-white/5 text-muted'
                               }`}
                             >
                               {available
@@ -747,7 +745,7 @@ export default function CreateBooking() {
                             </div>
 
                             {court.is_24_hours && (
-                              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700">
+                              <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-[10px] font-bold text-blue-300">
                                 24 Hours
                               </span>
                             )}
@@ -784,14 +782,16 @@ export default function CreateBooking() {
                       max={addDays(
                         formatDate(new Date()),
                         Number(
-                          settings?.booking_horizon_days ?? 60
-                        )
+                          settings?.booking_horizon_days ?? 60,
+                        ),
                       )}
                       onChange={(event) => {
-                        setSelectedDate(event.target.value)
+                        setSelectedDate(
+                          event.target.value,
+                        )
                         setSelectedSlots([])
                       }}
-                      className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm font-semibold text-ink outline-none transition focus:border-court focus:ring-2 focus:ring-court/10"
+                      className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-sm font-semibold text-ink outline-none transition focus:border-court focus:ring-2 focus:ring-court/10"
                     />
                   </div>
 
@@ -830,7 +830,7 @@ export default function CreateBooking() {
                       onClick={() =>
                         setSelectedSlots([])
                       }
-                      className="self-start rounded-lg px-2 py-1 text-xs font-bold text-red-500 transition hover:bg-red-50 hover:text-red-700"
+                      className="self-start rounded-lg px-2 py-1 text-xs font-bold text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
                     >
                       Clear selection
                     </button>
@@ -862,10 +862,13 @@ export default function CreateBooking() {
                           type="button"
                           onClick={() =>
                             selectDuration(
-                              value as 'one' | 'six' | 'full'
+                              value as
+                                | 'one'
+                                | 'six'
+                                | 'full',
                             )
                           }
-                          className="rounded-xl border border-line bg-white px-3.5 py-2 text-xs font-bold text-ink shadow-sm transition hover:border-court/40 hover:bg-court/5 hover:text-court"
+                          className="rounded-xl border border-line bg-surface px-3.5 py-2 text-xs font-bold text-ink shadow-sm transition hover:border-court/40 hover:bg-court/5 hover:text-court"
                         >
                           {label}
                         </button>
@@ -875,10 +878,10 @@ export default function CreateBooking() {
                 </div>
 
                 {/* LEGEND */}
-                <div className="mb-4 rounded-xl border border-line bg-white px-3.5 py-3">
+                <div className="mb-4 rounded-xl border border-line bg-surface px-3.5 py-3">
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-muted">
                     <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-white ring-1 ring-line" />
+                      <span className="h-2.5 w-2.5 rounded-full bg-surface-elevated ring-1 ring-line" />
                       Available
                     </div>
 
@@ -888,7 +891,7 @@ export default function CreateBooking() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
+                      <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
                       Booked
                     </div>
                   </div>
@@ -897,13 +900,14 @@ export default function CreateBooking() {
                 {loadingSlots ? (
                   <div className="rounded-2xl bg-paper py-14 text-center">
                     <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-line border-t-court" />
+
                     <p className="text-sm font-medium text-muted">
                       Loading available slots...
                     </p>
                   </div>
                 ) : slots.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-line bg-paper px-4 py-12 text-center">
-                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-lg shadow-sm">
+                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-surface-elevated text-lg">
                       🕐
                     </div>
 
@@ -920,7 +924,7 @@ export default function CreateBooking() {
                     {slots.map((slot: TimeSlot) => {
                       const selected =
                         selectedSlots.includes(
-                          slot.start_time
+                          slot.start_time,
                         )
 
                       const booked = !slot.available
@@ -938,21 +942,21 @@ export default function CreateBooking() {
                               ? 'cursor-not-allowed border-line bg-paper'
                               : selected
                                 ? 'border-court bg-court text-white shadow-sm'
-                                : 'border-line bg-white hover:-translate-y-0.5 hover:border-court/40 hover:bg-paper hover:shadow-sm'
+                                : 'border-line bg-surface hover:-translate-y-0.5 hover:border-court/40 hover:bg-paper hover:shadow-sm'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span
                               className={`text-sm font-bold ${
                                 booked
-                                  ? 'text-gray-400'
+                                  ? 'text-muted'
                                   : selected
                                     ? 'text-white'
                                     : 'text-ink'
                               }`}
                             >
                               {formatTime(
-                                slot.start_time
+                                slot.start_time,
                               )}
                             </span>
 
@@ -966,7 +970,7 @@ export default function CreateBooking() {
                           <p
                             className={`mt-1 text-[10px] font-medium ${
                               booked
-                                ? 'text-gray-400'
+                                ? 'text-muted'
                                 : selected
                                   ? 'text-white/70'
                                   : 'text-muted'
@@ -975,7 +979,7 @@ export default function CreateBooking() {
                             {booked
                               ? 'Booked'
                               : `until ${formatTime(
-                                  slot.end_time
+                                  slot.end_time,
                                 )}`}
                           </p>
                         </button>
@@ -1001,8 +1005,8 @@ export default function CreateBooking() {
                       </p>
                     </div>
 
-                    <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 text-[10px] font-bold text-green-700">
-                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                    <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-green-500/10 px-3 py-1.5 text-[10px] font-bold text-green-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
                       Ready
                     </span>
                   </div>
@@ -1022,6 +1026,7 @@ export default function CreateBooking() {
 
               <div className="p-5 sm:p-6">
                 <div className="grid gap-3 sm:grid-cols-2">
+
                   <button
                     type="button"
                     onClick={() =>
@@ -1131,11 +1136,11 @@ export default function CreateBooking() {
                           value={guestName}
                           onChange={(event) =>
                             setGuestName(
-                              event.target.value
+                              event.target.value,
                             )
                           }
                           placeholder="Juan Dela Cruz"
-                          className="w-full rounded-xl border border-line bg-white px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
+                          className="w-full rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
                         />
                       </div>
 
@@ -1149,11 +1154,11 @@ export default function CreateBooking() {
                           value={guestPhone}
                           onChange={(event) =>
                             setGuestPhone(
-                              event.target.value
+                              event.target.value,
                             )
                           }
                           placeholder="09XXXXXXXXX"
-                          className="w-full rounded-xl border border-line bg-white px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
+                          className="w-full rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
                         />
                       </div>
                     </div>
@@ -1174,12 +1179,12 @@ export default function CreateBooking() {
                           value={customerSearch}
                           onChange={(event) => {
                             setCustomerSearch(
-                              event.target.value
+                              event.target.value,
                             )
                             setSelectedCustomer(null)
                           }}
                           placeholder="Type username..."
-                          className="w-full rounded-xl border border-line bg-white px-4 py-3 pr-11 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
+                          className="w-full rounded-xl border border-line bg-surface px-4 py-3 pr-11 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-court focus:ring-2 focus:ring-court/10"
                         />
 
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted">
@@ -1206,7 +1211,7 @@ export default function CreateBooking() {
 
                       {customerResults.length > 0 &&
                         !selectedCustomer && (
-                          <div className="mt-2 overflow-hidden rounded-2xl border border-line bg-white shadow-lg">
+                          <div className="mt-2 overflow-hidden rounded-2xl border border-line bg-surface-elevated shadow-lg">
                             {customerResults.map(
                               (customer) => (
                                 <button
@@ -1214,7 +1219,7 @@ export default function CreateBooking() {
                                   type="button"
                                   onClick={() =>
                                     selectCustomer(
-                                      customer
+                                      customer,
                                     )
                                   }
                                   className="flex w-full items-center justify-between gap-3 border-b border-line px-4 py-3.5 text-left transition last:border-b-0 hover:bg-paper"
@@ -1241,27 +1246,27 @@ export default function CreateBooking() {
                                     Select →
                                   </span>
                                 </button>
-                              )
+                              ),
                             )}
                           </div>
                         )}
                     </div>
 
                     {selectedCustomer && (
-                      <div className="mt-4 flex items-center justify-between rounded-2xl border border-green-200 bg-green-50 px-4 py-3.5">
+                      <div className="mt-4 flex items-center justify-between rounded-2xl border border-green-500/20 bg-green-500/10 px-4 py-3.5">
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-500/15 text-sm font-bold text-green-300">
                             {selectedCustomer.username
                               .charAt(0)
                               .toUpperCase()}
                           </div>
 
                           <div className="min-w-0">
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-green-600">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-green-300">
                               Selected Customer
                             </p>
 
-                            <p className="mt-0.5 truncate text-sm font-bold text-green-900">
+                            <p className="mt-0.5 truncate text-sm font-bold text-green-200">
                               {selectedCustomer.username}
                             </p>
                           </div>
@@ -1274,7 +1279,7 @@ export default function CreateBooking() {
                             setCustomerSearch('')
                             setCustomerResults([])
                           }}
-                          className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-red-600 transition hover:bg-red-100 hover:text-red-700"
+                          className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
                         >
                           Change
                         </button>
@@ -1297,6 +1302,7 @@ export default function CreateBooking() {
 
               <div className="p-5 sm:p-6">
                 <div className="grid gap-3 sm:grid-cols-2">
+
                   <button
                     type="button"
                     onClick={() =>
@@ -1350,7 +1356,7 @@ export default function CreateBooking() {
 
                         <p className="mt-1 text-xs text-muted">
                           {Number(
-                            settings?.deposit_percentage ?? 50
+                            settings?.deposit_percentage ?? 50,
                           )}
                           % deposit
                         </p>
@@ -1369,12 +1375,12 @@ export default function CreateBooking() {
                   </button>
                 </div>
 
-                <div className="mt-4 flex gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3.5">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-600">
+                <div className="mt-4 flex gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3.5">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-xs font-bold text-blue-300">
                     i
                   </span>
 
-                  <p className="text-xs leading-5 text-blue-800">
+                  <p className="text-xs leading-5 text-blue-200">
                     Admin-created bookings are automatically
                     marked as <strong>verified</strong> and
                     confirmed immediately.
@@ -1387,7 +1393,7 @@ export default function CreateBooking() {
           {/* SUMMARY */}
           <aside>
             <div className="xl:sticky xl:top-5">
-              <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+              <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-sm">
 
                 {/* SUMMARY HEADER */}
                 <div className="bg-court px-5 py-5 text-white sm:px-6">
@@ -1500,12 +1506,12 @@ export default function CreateBooking() {
                                 <span className="text-[10px] font-medium text-muted">
                                   {slot
                                     ? formatTime(
-                                        slot.end_time
+                                        slot.end_time,
                                       )
                                     : ''}
                                 </span>
                               </div>
-                            )
+                            ),
                           )}
                         </div>
                       )}
@@ -1580,10 +1586,8 @@ export default function CreateBooking() {
                         loadingSlots ||
                         selectedSlots.length === 0
                       }
-                      onClick={
-                        handleCreateBooking
-                      }
-                      className="w-full rounded-xl bg-court px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                      onClick={handleCreateBooking}
+                      className="w-full rounded-xl bg-court px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-muted"
                     >
                       {submitting
                         ? 'Creating Booking...'
@@ -1604,8 +1608,8 @@ export default function CreateBooking() {
 
       {/* SUCCESS MODAL */}
       {successReference && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-surface-elevated shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface-elevated shadow-2xl">
 
             <div className="bg-court px-6 py-7 text-center text-white">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-3xl">
@@ -1632,8 +1636,8 @@ export default function CreateBooking() {
                 </p>
               </div>
 
-              <div className="mt-4 rounded-xl bg-blue-50 px-4 py-3">
-                <p className="text-xs leading-5 text-blue-800">
+              <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-3">
+                <p className="text-xs leading-5 text-blue-200">
                   Save this reference number for finding
                   the reservation later.
                 </p>
