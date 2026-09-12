@@ -1,4 +1,3 @@
-
 import {
   useEffect,
   useMemo,
@@ -48,7 +47,10 @@ type BookingGroup = {
   end_time: string
   totalAmount: number
   slotCount: number
-  payment_status: 'pending' | 'verified' | 'rejected'
+  payment_status:
+    | 'pending'
+    | 'verified'
+    | 'rejected'
   status: 'confirmed' | 'cancelled'
 }
 
@@ -57,8 +59,7 @@ type StatusFilter =
   | 'confirmed'
   | 'cancelled'
 
-type PaymentFilter =
-  | 'all'
+type PaymentTab =
   | 'pending'
   | 'verified'
   | 'rejected'
@@ -99,8 +100,11 @@ function formatTime(time: string) {
   }
 
   const normalizedHour = hour % 24
+
   const suffix =
-    normalizedHour >= 12 ? 'PM' : 'AM'
+    normalizedHour >= 12
+      ? 'PM'
+      : 'AM'
 
   const displayHour =
     normalizedHour % 12 || 12
@@ -277,6 +281,9 @@ export default function Reservations() {
   const notificationReference =
     searchParams.get('reference')
 
+  const notificationTab =
+    searchParams.get('tab')
+
   const [highlightedReference, setHighlightedReference] =
     useState<string | null>(null)
 
@@ -300,8 +307,8 @@ export default function Reservations() {
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>('all')
 
-  const [paymentFilter, setPaymentFilter] =
-    useState<PaymentFilter>('all')
+  const [paymentTab, setPaymentTab] =
+    useState<PaymentTab>('pending')
 
   const [search, setSearch] =
     useState('')
@@ -420,6 +427,16 @@ export default function Reservations() {
       notificationReference
     )
 
+    if (
+      notificationTab === 'pending' ||
+      notificationTab === 'verified' ||
+      notificationTab === 'rejected'
+    ) {
+      setPaymentTab(
+        notificationTab
+      )
+    }
+
     if (highlightTimerRef.current) {
       clearTimeout(
         highlightTimerRef.current
@@ -438,7 +455,10 @@ export default function Reservations() {
         )
       }
     }
-  }, [notificationReference])
+  }, [
+    notificationReference,
+    notificationTab,
+  ])
 
   /* =======================================================
      GROUP BOOKINGS
@@ -476,6 +496,49 @@ export default function Reservations() {
     }, [bookings])
 
   /* =======================================================
+     PAYMENT TAB COUNTS
+  ======================================================= */
+
+  const pendingPaymentCount =
+    bookings.filter(
+      (booking) =>
+        booking.payment_status ===
+        'pending'
+    ).length
+
+  const verifiedPaymentCount =
+    bookings.filter(
+      (booking) =>
+        booking.payment_status ===
+        'verified'
+    ).length
+
+  const rejectedPaymentCount =
+    bookings.filter(
+      (booking) =>
+        booking.payment_status ===
+        'rejected'
+    ).length
+
+  /* =======================================================
+     STATUS COUNTS
+  ======================================================= */
+
+  const confirmedCount =
+    bookings.filter(
+      (booking) =>
+        booking.status ===
+        'confirmed'
+    ).length
+
+  const cancelledCount =
+    bookings.filter(
+      (booking) =>
+        booking.status ===
+        'cancelled'
+    ).length
+
+  /* =======================================================
      SEARCH + FILTER + SORT
   ======================================================= */
 
@@ -500,13 +563,11 @@ export default function Reservations() {
               return false
             }
 
-            /* PAYMENT */
+            /* PAYMENT TAB */
 
             if (
-              paymentFilter !==
-                'all' &&
               booking.payment_status !==
-                paymentFilter
+              paymentTab
             ) {
               return false
             }
@@ -667,7 +728,7 @@ export default function Reservations() {
       bookings,
       search,
       statusFilter,
-      paymentFilter,
+      paymentTab,
       courtFilter,
       dateFilter,
       sortBy,
@@ -710,45 +771,6 @@ export default function Reservations() {
   ])
 
   /* =======================================================
-     FILTER COUNTS
-  ======================================================= */
-
-  const confirmedCount =
-    bookings.filter(
-      (booking) =>
-        booking.status ===
-        'confirmed'
-    ).length
-
-  const cancelledCount =
-    bookings.filter(
-      (booking) =>
-        booking.status ===
-        'cancelled'
-    ).length
-
-  const pendingPaymentCount =
-    bookings.filter(
-      (booking) =>
-        booking.payment_status ===
-        'pending'
-    ).length
-
-  const verifiedPaymentCount =
-    bookings.filter(
-      (booking) =>
-        booking.payment_status ===
-        'verified'
-    ).length
-
-  const rejectedPaymentCount =
-    bookings.filter(
-      (booking) =>
-        booking.payment_status ===
-        'rejected'
-    ).length
-
-  /* =======================================================
      CLEAR FILTERS
   ======================================================= */
 
@@ -757,7 +779,7 @@ export default function Reservations() {
     courtFilter !== 'all' ||
     dateFilter !== '' ||
     statusFilter !== 'all' ||
-    paymentFilter !== 'all' ||
+    paymentTab !== 'pending' ||
     sortBy !== 'newest'
 
   function clearFilters() {
@@ -765,8 +787,19 @@ export default function Reservations() {
     setCourtFilter('all')
     setDateFilter('')
     setStatusFilter('all')
-    setPaymentFilter('all')
+    setPaymentTab('pending')
     setSortBy('newest')
+    setHighlightedReference(null)
+  }
+
+  /* =======================================================
+     PAYMENT TAB HANDLER
+  ======================================================= */
+
+  function handlePaymentTabChange(
+    tab: PaymentTab
+  ) {
+    setPaymentTab(tab)
     setHighlightedReference(null)
   }
 
@@ -1163,6 +1196,28 @@ export default function Reservations() {
   }
 
   /* =======================================================
+     PAYMENT TAB BUTTON
+  ======================================================= */
+
+  function getPaymentTabClass(
+    tab: PaymentTab
+  ) {
+    if (paymentTab !== tab) {
+      return 'border-transparent bg-transparent text-muted hover:bg-paper hover:text-ink'
+    }
+
+    if (tab === 'pending') {
+      return 'border-yellow-400/20 bg-yellow-400/10 text-yellow-300 shadow-sm'
+    }
+
+    if (tab === 'verified') {
+      return 'border-green-400/20 bg-green-400/10 text-green-400 shadow-sm'
+    }
+
+    return 'border-red-400/20 bg-red-400/10 text-red-400 shadow-sm'
+  }
+
+  /* =======================================================
      RENDER
   ======================================================= */
 
@@ -1305,6 +1360,84 @@ export default function Reservations() {
             )}
           </div>
 
+          {/* PAYMENT TABS */}
+
+          <div className="mb-5">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-xs font-semibold text-ink">
+                Payment Status
+              </label>
+
+              <span className="text-[10px] text-muted">
+                Select payment queue
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1 rounded-2xl border border-line bg-paper p-1.5">
+
+              <button
+                type="button"
+                onClick={() =>
+                  handlePaymentTabChange(
+                    'pending'
+                  )
+                }
+                className={`inline-flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 transition ${getPaymentTabClass(
+                  'pending'
+                )}`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-[0.08em]">
+                  Pending
+                </span>
+
+                <span className="font-display text-lg font-bold">
+                  {pendingPaymentCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handlePaymentTabChange(
+                    'verified'
+                  )
+                }
+                className={`inline-flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 transition ${getPaymentTabClass(
+                  'verified'
+                )}`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-[0.08em]">
+                  Verified
+                </span>
+
+                <span className="font-display text-lg font-bold">
+                  {verifiedPaymentCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handlePaymentTabChange(
+                    'rejected'
+                  )
+                }
+                className={`inline-flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 transition ${getPaymentTabClass(
+                  'rejected'
+                )}`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-[0.08em]">
+                  Rejected
+                </span>
+
+                <span className="font-display text-lg font-bold">
+                  {rejectedPaymentCount}
+                </span>
+              </button>
+
+            </div>
+          </div>
+
           {/* SEARCH */}
 
           <div className="mb-4">
@@ -1337,7 +1470,7 @@ export default function Reservations() {
 
           {/* FILTER GRID */}
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 
             {/* STATUS */}
 
@@ -1362,46 +1495,13 @@ export default function Reservations() {
                 <option value="all">
                   All Status
                 </option>
+
                 <option value="confirmed">
                   Confirmed ({confirmedCount})
                 </option>
+
                 <option value="cancelled">
                   Cancelled ({cancelledCount})
-                </option>
-              </select>
-            </div>
-
-            {/* PAYMENT */}
-
-            <div>
-              <label
-                htmlFor="reservation-payment"
-                className="mb-2 block text-xs font-semibold text-ink"
-              >
-                Payment Status
-              </label>
-
-              <select
-                id="reservation-payment"
-                value={paymentFilter}
-                onChange={(event) =>
-                  setPaymentFilter(
-                    event.target.value as PaymentFilter
-                  )
-                }
-                className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
-              >
-                <option value="all">
-                  All Payments
-                </option>
-                <option value="pending">
-                  Pending ({pendingPaymentCount})
-                </option>
-                <option value="verified">
-                  Verified ({verifiedPaymentCount})
-                </option>
-                <option value="rejected">
-                  Rejected ({rejectedPaymentCount})
                 </option>
               </select>
             </div>
@@ -1493,18 +1593,23 @@ export default function Reservations() {
                 <option value="newest">
                   Newest Added
                 </option>
+
                 <option value="oldest">
                   Oldest Added
                 </option>
+
                 <option value="booking_earliest">
                   Booking Date: Earliest
                 </option>
+
                 <option value="booking_latest">
                   Booking Date: Latest
                 </option>
+
                 <option value="amount_high">
                   Amount: Highest
                 </option>
+
                 <option value="amount_low">
                   Amount: Lowest
                 </option>
@@ -1515,7 +1620,13 @@ export default function Reservations() {
               <div className="w-full rounded-xl border border-line bg-paper px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-                    Results
+                    {paymentTab ===
+                    'pending'
+                      ? 'Pending Results'
+                      : paymentTab ===
+                        'verified'
+                      ? 'Verified Results'
+                      : 'Rejected Results'}
                   </span>
 
                   <span className="font-display text-lg font-bold text-court">
@@ -1578,13 +1689,25 @@ export default function Reservations() {
             <div className="rounded-2xl border border-dashed border-line bg-surface p-10 text-center">
 
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-paper text-2xl text-court">
-                📅
+                {paymentTab ===
+                'pending'
+                  ? '⏳'
+                  : paymentTab ===
+                    'verified'
+                  ? '✓'
+                  : '✕'}
               </div>
 
               <h2 className="mt-4 font-display text-lg font-semibold text-ink">
                 {bookings.length === 0
                   ? 'No reservations yet'
-                  : 'No matching reservations'}
+                  : paymentTab ===
+                    'pending'
+                  ? 'No pending payments'
+                  : paymentTab ===
+                    'verified'
+                  ? 'No verified payments'
+                  : 'No rejected payments'}
               </h2>
 
               <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">
