@@ -569,7 +569,7 @@ export default function CreateBooking() {
               onClick={() =>
                 navigate('/admin/reservations')
               }
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition hover:border-court/30 hover:bg-paper"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition hover:border-court/30 hover:bg-paper"
             >
               <span className="text-base">←</span>
               Back to Reservations
@@ -642,7 +642,7 @@ export default function CreateBooking() {
               <div className="p-5 sm:p-6">
                 {courts.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-line bg-paper px-4 py-10 text-center">
-                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-xl shadow-sm">
+                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-surface-elevated text-xl shadow-sm">
                       🏓
                     </div>
 
@@ -681,10 +681,10 @@ export default function CreateBooking() {
                           }}
                           className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition ${
                             selected
-                              ? 'border-court bg-court/[0.04] ring-2 ring-court/15'
-                              : available
-                                ? 'border-line bg-white hover:-translate-y-0.5 hover:border-court/40 hover:shadow-sm'
-                                : 'cursor-not-allowed border-line bg-paper opacity-60'
+                                ? 'border-court bg-court/[0.04] ring-2 ring-court/15'
+                                : available
+                                  ? 'border-line bg-surface hover:-translate-y-0.5 hover:border-court/40 hover:shadow-sm'
+                                  : 'cursor-not-allowed border-line bg-paper opacity-60'
                           }`}
                         >
                           {selected && (
@@ -1605,7 +1605,7 @@ export default function CreateBooking() {
       {/* SUCCESS MODAL */}
       {successReference && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-surface-elevated shadow-2xl">
 
             <div className="bg-court px-6 py-7 text-center text-white">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-3xl">
