@@ -16,6 +16,7 @@ import {
 import { getCourts } from '../../services/courtService'
 import type { Court } from '../../types/court'
 import type { TimeSlot } from '../../types/availability'
+import { useAdminToast } from '../../context/AdminToastContext'
 
 type ReservationRow = {
   id: string
@@ -277,6 +278,11 @@ export default function Reservations() {
     setSearchParams,
   ] = useSearchParams()
 
+  const {
+    success,
+    error: showError,
+  } = useAdminToast()
+
   const [rows, setRows] =
     useState<ReservationRow[]>([])
 
@@ -293,9 +299,6 @@ export default function Reservations() {
 
   const [actionLoading, setActionLoading] =
     useState(false)
-
-  const [error, setError] =
-    useState('')
 
   /* =======================================================
      SEARCH / FILTER STATE
@@ -362,7 +365,6 @@ export default function Reservations() {
   async function load() {
     try {
       setLoading(true)
-      setError('')
 
       const [
         data,
@@ -382,7 +384,7 @@ export default function Reservations() {
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to load reservations.'
@@ -412,6 +414,12 @@ export default function Reservations() {
       console.error(
         'Failed to load courts:',
         err
+      )
+
+      showError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to load courts.'
       )
     }
   }
@@ -562,11 +570,11 @@ export default function Reservations() {
   ======================================================= */
 
   const hasFilters =
-  search.trim() !== '' ||
-  paymentFilter !== 'all' ||
-  courtFilter !== 'all' ||
-  bookingDate !== '' ||
-  sortBy !== 'newest'
+    search.trim() !== '' ||
+    paymentFilter !== 'all' ||
+    courtFilter !== 'all' ||
+    bookingDate !== '' ||
+    sortBy !== 'newest'
 
   /* =======================================================
      CLEAR FILTERS
@@ -824,7 +832,6 @@ export default function Reservations() {
 
     try {
       setActionLoading(true)
-      setError('')
 
       if (action === 'verify') {
         await verifyBookingPayment(
@@ -849,7 +856,19 @@ export default function Reservations() {
 
       await load()
 
+      if (action === 'verify') {
+        success('Payment verified')
+      }
+
+      if (action === 'reject') {
+        success('Payment rejected')
+      }
+
       if (action === 'cancel') {
+        success(
+          'Booking cancelled successfully'
+        )
+
         const reference =
           booking.booking_reference
 
@@ -873,7 +892,7 @@ export default function Reservations() {
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to update booking.'
@@ -898,8 +917,6 @@ export default function Reservations() {
     ) {
       return
     }
-
-    setError('')
 
     setRescheduleBooking(
       booking
@@ -943,7 +960,6 @@ export default function Reservations() {
 
     try {
       setRescheduleLoading(true)
-      setError('')
 
       const slots =
         await getAvailableSlots(
@@ -961,7 +977,7 @@ export default function Reservations() {
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to load available slots.'
@@ -1038,7 +1054,7 @@ export default function Reservations() {
       !rescheduleBooking
         .booking_reference
     ) {
-      setError(
+      showError(
         'Booking reference is missing.'
       )
 
@@ -1049,7 +1065,7 @@ export default function Reservations() {
       selectedRescheduleSlots.length !==
       rescheduleBooking.slotCount
     ) {
-      setError(
+      showError(
         `Please select exactly ${
           rescheduleBooking.slotCount
         } time slot${
@@ -1065,7 +1081,6 @@ export default function Reservations() {
 
     try {
       setRescheduleSaving(true)
-      setError('')
 
       const bookingReference =
         rescheduleBooking.booking_reference
@@ -1102,6 +1117,10 @@ export default function Reservations() {
 
       await load()
 
+      success(
+        'Booking rescheduled successfully'
+      )
+
       /*
        * After a successful admin reschedule,
        * immediately move to the RESCHEDULED tab
@@ -1121,7 +1140,7 @@ export default function Reservations() {
     } catch (err) {
       console.error(err)
 
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : 'Failed to reschedule booking.'
@@ -1816,22 +1835,6 @@ export default function Reservations() {
         </section>
 
         {/* =================================================
-            ERROR
-        ================================================= */}
-
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-300">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5">
-                ⚠
-              </span>
-
-              <p>{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* =================================================
             LOADING
         ================================================= */}
 
@@ -1881,16 +1884,16 @@ export default function Reservations() {
               </h2>
 
               <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">
-  {hasFilters
-    ? 'Try adjusting or clearing your search and filters.'
-    : filter === 'rescheduled'
-      ? 'Rescheduled bookings will appear here.'
-      : filter === 'cancelled'
-        ? 'Cancelled bookings will appear here.'
-        : filter === 'confirmed'
-          ? 'Confirmed bookings will appear here.'
-          : 'There are currently no reservations.'}
-</p>
+                {hasFilters
+                  ? 'Try adjusting or clearing your search and filters.'
+                  : filter === 'rescheduled'
+                    ? 'Rescheduled bookings will appear here.'
+                    : filter === 'cancelled'
+                      ? 'Cancelled bookings will appear here.'
+                      : filter === 'confirmed'
+                        ? 'Confirmed bookings will appear here.'
+                        : 'There are currently no reservations.'}
+              </p>
 
               {hasFilters && (
                 <button

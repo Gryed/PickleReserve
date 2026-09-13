@@ -9,7 +9,7 @@ export default function Home() {
         <img
           src="/images/alexxamie-hero.jpg"
           alt="Pickleball court"
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-cover opacity-70"
         />
 
         {/* Dark / green overlay */}

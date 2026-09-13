@@ -1,8 +1,10 @@
+
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -37,9 +39,20 @@ export function AdminToastProvider({
 }) {
   const [toast, setToast] = useState<ToastData | null>(null)
 
-  const removeToast = useCallback(() => {
-    setToast(null)
+  const toastIdRef = useRef(0)
+  const toastTimerRef = useRef<number | null>(null)
+
+  const clearToastTimer = useCallback(() => {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = null
+    }
   }, [])
+
+  const removeToast = useCallback(() => {
+    clearToastTimer()
+    setToast(null)
+  }, [clearToastTimer])
 
   const showToast = useCallback(
     (
@@ -47,7 +60,11 @@ export function AdminToastProvider({
       message: string,
       duration = 3500
     ) => {
-      const id = Date.now()
+      clearToastTimer()
+
+      toastIdRef.current += 1
+
+      const id = toastIdRef.current
 
       setToast({
         id,
@@ -56,14 +73,20 @@ export function AdminToastProvider({
       })
 
       if (duration > 0) {
-        window.setTimeout(() => {
-          setToast((current) =>
-            current?.id === id ? null : current
-          )
+        toastTimerRef.current = window.setTimeout(() => {
+          setToast((current) => {
+            if (current?.id === id) {
+              return null
+            }
+
+            return current
+          })
+
+          toastTimerRef.current = null
         }, duration)
       }
     },
-    []
+    [clearToastTimer]
   )
 
   const success = useCallback(
@@ -96,9 +119,9 @@ export function AdminToastProvider({
 
   useEffect(() => {
     return () => {
-      setToast(null)
+      clearToastTimer()
     }
-  }, [])
+  }, [clearToastTimer])
 
   return (
     <AdminToastContext.Provider
@@ -112,7 +135,11 @@ export function AdminToastProvider({
     >
       {children}
 
-      <div className="pointer-events-none fixed right-4 top-4 z-[9999] flex w-[calc(100%-2rem)] max-w-sm flex-col items-end sm:right-6 sm:top-6">
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="pointer-events-none fixed right-4 top-4 z-[9999] flex w-[calc(100%-2rem)] max-w-sm flex-col items-end sm:right-6 sm:top-6"
+      >
         <div className="pointer-events-auto w-full">
           {toast && (
             <AdminToast
