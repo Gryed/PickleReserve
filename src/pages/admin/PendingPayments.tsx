@@ -1,23 +1,11 @@
+﻿import { useEffect, useMemo, useState } from 'react'
 import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
-import { useSearchParams } from 'react-router-dom'
-import {
-  adminRescheduleBooking,
-  cancelBooking,
-  getAllReservationsAdmin,
-  getAvailableSlots,
+  getPendingPaymentsAdmin,
   rejectBookingPayment,
   verifyBookingPayment,
 } from '../../services/availabilityService'
-import { getCourts } from '../../services/courtService'
-import type { Court } from '../../types/court'
-import type { TimeSlot } from '../../types/availability'
 
-type ReservationRow = {
+type PendingReservation = {
   id: string
   court_id: string
   user_id: string | null
@@ -41,46 +29,28 @@ type ReservationRow = {
 type BookingGroup = {
   key: string
   booking_reference: string | null
-  rows: ReservationRow[]
-  firstRow: ReservationRow
+  rows: PendingReservation[]
+  firstRow: PendingReservation
   start_time: string
   end_time: string
   totalAmount: number
   slotCount: number
-  payment_status:
-    | 'pending'
-    | 'verified'
-    | 'rejected'
-  status: 'confirmed' | 'cancelled'
 }
 
-type StatusFilter =
-  | 'all'
-  | 'confirmed'
-  | 'cancelled'
-
-type PaymentTab =
-  | 'pending'
-  | 'verified'
-  | 'rejected'
-
-type SortOption =
-  | 'newest'
-  | 'oldest'
-  | 'booking_earliest'
-  | 'booking_latest'
-  | 'amount_high'
-  | 'amount_low'
-
-type ActionType =
-  | 'verify'
-  | 'reject'
-  | 'cancel'
+type ActionType = 'verify' | 'reject'
 
 type ActionTarget = {
   booking: BookingGroup
   action: ActionType
 }
+
+type SortOption =
+  | 'newest'
+  | 'oldest'
+  | 'highest'
+  | 'lowest'
+  | 'date_asc'
+  | 'date_desc'
 
 /* =========================================================
    FORMAT HELPERS
@@ -89,9 +59,7 @@ type ActionTarget = {
 function formatTime(time: string) {
   if (!time) return ''
 
-  const [hourString, minuteString] =
-    time.split(':')
-
+  const [hourString, minuteString] = time.split(':')
   const hour = Number(hourString)
   const minute = minuteString ?? '00'
 
@@ -100,14 +68,8 @@ function formatTime(time: string) {
   }
 
   const normalizedHour = hour % 24
-
-  const suffix =
-    normalizedHour >= 12
-      ? 'PM'
-      : 'AM'
-
-  const displayHour =
-    normalizedHour % 12 || 12
+  const suffix = normalizedHour >= 12 ? 'PM' : 'AM'
+  const displayHour = normalizedHour % 12 || 12
 
   return `${displayHour}:${minute} ${suffix}`
 }
@@ -115,100 +77,50 @@ function formatTime(time: string) {
 function formatDate(date: string) {
   if (!date) return ''
 
-  const parsed =
-    new Date(`${date}T00:00:00`)
+  const parsed = new Date(`${date}T00:00:00`)
 
   if (Number.isNaN(parsed.getTime())) {
     return date
   }
 
-  return parsed.toLocaleDateString(
-    'en-US',
-    {
-      weekday: 'short',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    }
-  )
+  return parsed.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
 
 function formatCurrency(amount: number) {
-  return `₱${amount.toLocaleString(
-    'en-PH',
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }
-  )}`
+  return `â‚±${amount.toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
 }
 
 /* =========================================================
-   BOOKING HELPERS
+   CUSTOMER
 ========================================================= */
 
-function getCustomerName(
-  row: ReservationRow
-) {
-  return (
-    row.guest_name ||
-    'Registered customer'
-  )
+function getCustomerName(row: PendingReservation) {
+  return row.guest_name || 'Registered customer'
 }
 
-function getGroupPaymentStatus(
-  rows: ReservationRow[]
-): BookingGroup['payment_status'] {
-  if (
-    rows.some(
-      (row) =>
-        row.payment_status ===
-        'rejected'
-    )
-  ) {
-    return 'rejected'
-  }
-
-  if (
-    rows.length > 0 &&
-    rows.every(
-      (row) =>
-        row.payment_status ===
-        'verified'
-    )
-  ) {
-    return 'verified'
-  }
-
-  return 'pending'
-}
-
-function getGroupStatus(
-  rows: ReservationRow[]
-): BookingGroup['status'] {
-  return rows.every(
-    (row) =>
-      row.status === 'cancelled'
-  )
-    ? 'cancelled'
-    : 'confirmed'
-}
+/* =========================================================
+   GROUP BOOKINGS
+========================================================= */
 
 function groupReservations(
-  rows: ReservationRow[]
+  rows: PendingReservation[]
 ): BookingGroup[] {
-  const groups = new Map<
-    string,
-    ReservationRow[]
-  >()
+  const groups = new Map<string, PendingReservation[]>()
 
   for (const row of rows) {
     const key =
       row.booking_reference ||
       `reservation-${row.id}`
 
-    const existing =
-      groups.get(key)
+    const existing = groups.get(key)
 
     if (existing) {
       existing.push(row)
@@ -217,30 +129,22 @@ function groupReservations(
     }
   }
 
-  return Array.from(
-    groups.entries()
-  ).map(
+  return Array.from(groups.entries()).map(
     ([key, groupRows]) => {
-      const sortedRows =
-        [...groupRows].sort(
-          (a, b) =>
-            a.start_time.localeCompare(
-              b.start_time
-            )
-        )
+      const sortedRows = [...groupRows].sort(
+        (a, b) =>
+          a.start_time.localeCompare(
+            b.start_time
+          )
+      )
 
-      const firstRow =
-        sortedRows[0]
+      const firstRow = sortedRows[0]
 
-      const totalAmount =
-        sortedRows.reduce(
-          (total, row) =>
-            total +
-            Number(
-              row.amount_due ?? 0
-            ),
-          0
-        )
+      const totalAmount = sortedRows.reduce(
+        (total, row) =>
+          total + Number(row.amount_due ?? 0),
+        0
+      )
 
       return {
         key,
@@ -248,23 +152,12 @@ function groupReservations(
           firstRow.booking_reference,
         rows: sortedRows,
         firstRow,
-        start_time:
-          sortedRows[0].start_time,
+        start_time: sortedRows[0].start_time,
         end_time:
-          sortedRows[
-            sortedRows.length - 1
-          ].end_time,
+          sortedRows[sortedRows.length - 1]
+            .end_time,
         totalAmount,
-        slotCount:
-          sortedRows.length,
-        payment_status:
-          getGroupPaymentStatus(
-            sortedRows
-          ),
-        status:
-          getGroupStatus(
-            sortedRows
-          ),
+        slotCount: sortedRows.length,
       }
     }
   )
@@ -274,26 +167,9 @@ function groupReservations(
    COMPONENT
 ========================================================= */
 
-export default function Reservations() {
-  const [searchParams] =
-    useSearchParams()
-
-  const notificationReference =
-    searchParams.get('reference')
-
-  const notificationTab =
-    searchParams.get('tab')
-
-  const [highlightedReference, setHighlightedReference] =
-    useState<string | null>(null)
-
-  const highlightTimerRef =
-    useRef<ReturnType<typeof setTimeout> | null>(
-      null
-    )
-
+export default function PendingPayments() {
   const [rows, setRows] =
-    useState<ReservationRow[]>([])
+    useState<PendingReservation[]>([])
 
   const [loading, setLoading] =
     useState(true)
@@ -301,26 +177,7 @@ export default function Reservations() {
   const [actionLoading, setActionLoading] =
     useState(false)
 
-  const [error, setError] =
-    useState('')
-
-  const [statusFilter, setStatusFilter] =
-    useState<StatusFilter>('all')
-
-  const [paymentTab, setPaymentTab] =
-    useState<PaymentTab>('pending')
-
-  const [search, setSearch] =
-    useState('')
-
-  const [courtFilter, setCourtFilter] =
-    useState('all')
-
-  const [dateFilter, setDateFilter] =
-    useState('')
-
-  const [sortBy, setSortBy] =
-    useState<SortOption>('newest')
+  const [error, setError] = useState('')
 
   const [selectedImage, setSelectedImage] =
     useState<string | null>(null)
@@ -329,47 +186,29 @@ export default function Reservations() {
     useState<ActionTarget | null>(null)
 
   /* =======================================================
-     RESCHEDULE STATE
+     SEARCH / SORT
   ======================================================= */
 
-  const [rescheduleBooking, setRescheduleBooking] =
-    useState<BookingGroup | null>(null)
-
-  const [rescheduleDate, setRescheduleDate] =
+  const [searchTerm, setSearchTerm] =
     useState('')
 
-  const [rescheduleCourtId, setRescheduleCourtId] =
-    useState('')
-
-  const [rescheduleSlots, setRescheduleSlots] =
-    useState<TimeSlot[]>([])
-
-  const [selectedRescheduleSlots, setSelectedRescheduleSlots] =
-    useState<TimeSlot[]>([])
-
-  const [courts, setCourts] =
-    useState<Court[]>([])
-
-  const [rescheduleLoading, setRescheduleLoading] =
-    useState(false)
-
-  const [rescheduleSaving, setRescheduleSaving] =
-    useState(false)
+  const [sortBy, setSortBy] =
+    useState<SortOption>('newest')
 
   /* =======================================================
-     LOAD RESERVATIONS
+     LOAD PENDING PAYMENTS
   ======================================================= */
 
-  async function load() {
+  async function loadPayments() {
     try {
       setLoading(true)
       setError('')
 
       const data =
-        await getAllReservationsAdmin()
+        await getPendingPaymentsAdmin()
 
       setRows(
-        data as ReservationRow[]
+        data as PendingReservation[]
       )
     } catch (err) {
       console.error(err)
@@ -377,433 +216,131 @@ export default function Reservations() {
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to load reservations.'
+          : 'Failed to load pending payments.'
       )
     } finally {
       setLoading(false)
     }
   }
 
-  /* =======================================================
-     LOAD COURTS
-  ======================================================= */
-
-  async function loadCourts() {
-    try {
-      const data =
-        await getCourts()
-
-      setCourts(
-        data.filter(
-          (court) =>
-            court.status ===
-            'available'
-        )
-      )
-    } catch (err) {
-      console.error(
-        'Failed to load courts:',
-        err
-      )
-    }
-  }
-
   useEffect(() => {
-    load()
-    loadCourts()
+    loadPayments()
   }, [])
 
   /* =======================================================
-     NOTIFICATION → PAYMENT HIGHLIGHT
-  ======================================================= */
-
-  useEffect(() => {
-    if (!notificationReference) {
-      return
-    }
-
-    setSearch(notificationReference)
-    setHighlightedReference(
-      notificationReference
-    )
-
-    if (
-      notificationTab === 'pending' ||
-      notificationTab === 'verified' ||
-      notificationTab === 'rejected'
-    ) {
-      setPaymentTab(
-        notificationTab
-      )
-    }
-
-    if (highlightTimerRef.current) {
-      clearTimeout(
-        highlightTimerRef.current
-      )
-    }
-
-    highlightTimerRef.current =
-      setTimeout(() => {
-        setHighlightedReference(null)
-      }, 5000)
-
-    return () => {
-      if (highlightTimerRef.current) {
-        clearTimeout(
-          highlightTimerRef.current
-        )
-      }
-    }
-  }, [
-    notificationReference,
-    notificationTab,
-  ])
-
-  /* =======================================================
-     GROUP BOOKINGS
+     GROUP
   ======================================================= */
 
   const bookings = useMemo(
-    () =>
-      groupReservations(rows),
+    () => groupReservations(rows),
     [rows]
   )
 
   /* =======================================================
-     COURT OPTIONS
+     FILTER + SORT
   ======================================================= */
 
-  const courtOptions =
-    useMemo(() => {
-      const names =
-        new Set<string>()
+  const filteredBookings = useMemo(() => {
+    const query = searchTerm
+      .trim()
+      .toLowerCase()
 
-      for (const booking of bookings) {
-        for (const row of booking.rows) {
-          if (row.courts?.name) {
-            names.add(
-              row.courts.name
-            )
-          }
-        }
-      }
+    let result = [...bookings]
 
-      return Array.from(names).sort(
-        (a, b) =>
-          a.localeCompare(b)
-      )
-    }, [bookings])
+    if (query) {
+      result = result.filter((booking) => {
+        const row = booking.firstRow
 
-  /* =======================================================
-     PAYMENT TAB COUNTS
-  ======================================================= */
+        const bookingReference =
+          booking.booking_reference
+            ?.toLowerCase() ?? ''
 
-  const pendingPaymentCount =
-    bookings.filter(
-      (booking) =>
-        booking.payment_status ===
-        'pending'
-    ).length
+        const customerName =
+          getCustomerName(row).toLowerCase()
 
-  const verifiedPaymentCount =
-    bookings.filter(
-      (booking) =>
-        booking.payment_status ===
-        'verified'
-    ).length
+        const phone =
+          row.guest_phone?.toLowerCase() ?? ''
 
-  const rejectedPaymentCount =
-    bookings.filter(
-      (booking) =>
-        booking.payment_status ===
-        'rejected'
-    ).length
-
-  /* =======================================================
-     STATUS COUNTS
-  ======================================================= */
-
-  const confirmedCount =
-    bookings.filter(
-      (booking) =>
-        booking.status ===
-        'confirmed'
-    ).length
-
-  const cancelledCount =
-    bookings.filter(
-      (booking) =>
-        booking.status ===
-        'cancelled'
-    ).length
-
-  /* =======================================================
-     SEARCH + FILTER + SORT
-  ======================================================= */
-
-  const filteredBookings =
-    useMemo(() => {
-      const normalizedSearch =
-        search
-          .trim()
-          .toLowerCase()
-
-      const filtered =
-        bookings.filter(
-          (booking) => {
-            /* STATUS */
-
-            if (
-              statusFilter !==
-                'all' &&
-              booking.status !==
-                statusFilter
-            ) {
-              return false
-            }
-
-            /* PAYMENT TAB */
-
-            if (
-              booking.payment_status !==
-              paymentTab
-            ) {
-              return false
-            }
-
-            /* COURT */
-
-            if (
-              courtFilter !==
-                'all'
-            ) {
-              const hasCourt =
-                booking.rows.some(
-                  (row) =>
-                    row.courts
-                      ?.name ===
-                    courtFilter
-                )
-
-              if (!hasCourt) {
-                return false
-              }
-            }
-
-            /* DATE */
-
-            if (
-              dateFilter &&
-              booking.rows.every(
-                (row) =>
-                  row.date !==
-                  dateFilter
-              )
-            ) {
-              return false
-            }
-
-            /* SEARCH */
-
-            if (
-              normalizedSearch
-            ) {
-              const searchable =
-                [
-                  booking.booking_reference,
-                  getCustomerName(
-                    booking.firstRow
-                  ),
-                  booking.firstRow
-                    .guest_phone,
-                  booking.firstRow
-                    .courts?.name,
-                  booking.firstRow
-                    .payment_type,
-                  booking.payment_status,
-                  booking.status,
-                ]
-                  .filter(Boolean)
-                  .join(' ')
-                  .toLowerCase()
-
-              if (
-                !searchable.includes(
-                  normalizedSearch
-                )
-              ) {
-                return false
-              }
-            }
-
-            return true
-          }
+        return (
+          bookingReference.includes(query) ||
+          customerName.includes(query) ||
+          phone.includes(query)
         )
+      })
+    }
 
-      return filtered.sort(
-        (a, b) => {
-          if (
-            sortBy === 'newest'
-          ) {
-            return (
-              new Date(
-                b.firstRow.created_at
-              ).getTime() -
-              new Date(
-                a.firstRow.created_at
-              ).getTime()
-            )
-          }
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'newest': {
+          const aTime = new Date(
+            a.firstRow.created_at
+          ).getTime()
 
-          if (
-            sortBy === 'oldest'
-          ) {
-            return (
-              new Date(
-                a.firstRow.created_at
-              ).getTime() -
-              new Date(
-                b.firstRow.created_at
-              ).getTime()
-            )
-          }
+          const bTime = new Date(
+            b.firstRow.created_at
+          ).getTime()
 
-          if (
-            sortBy ===
-            'booking_earliest'
-          ) {
-            const aDate =
-              new Date(
-                `${a.firstRow.date}T${a.start_time}`
-              ).getTime()
-
-            const bDate =
-              new Date(
-                `${b.firstRow.date}T${b.start_time}`
-              ).getTime()
-
-            return aDate - bDate
-          }
-
-          if (
-            sortBy ===
-            'booking_latest'
-          ) {
-            const aDate =
-              new Date(
-                `${a.firstRow.date}T${a.start_time}`
-              ).getTime()
-
-            const bDate =
-              new Date(
-                `${b.firstRow.date}T${b.start_time}`
-              ).getTime()
-
-            return bDate - aDate
-          }
-
-          if (
-            sortBy === 'amount_high'
-          ) {
-            return (
-              b.totalAmount -
-              a.totalAmount
-            )
-          }
-
-          if (
-            sortBy === 'amount_low'
-          ) {
-            return (
-              a.totalAmount -
-              b.totalAmount
-            )
-          }
-
-          return 0
+          return bTime - aTime
         }
-      )
-    }, [
-      bookings,
-      search,
-      statusFilter,
-      paymentTab,
-      courtFilter,
-      dateFilter,
-      sortBy,
-    ])
+
+        case 'oldest': {
+          const aTime = new Date(
+            a.firstRow.created_at
+          ).getTime()
+
+          const bTime = new Date(
+            b.firstRow.created_at
+          ).getTime()
+
+          return aTime - bTime
+        }
+
+        case 'highest':
+          return b.totalAmount - a.totalAmount
+
+        case 'lowest':
+          return a.totalAmount - b.totalAmount
+
+        case 'date_asc': {
+          const dateCompare =
+            a.firstRow.date.localeCompare(
+              b.firstRow.date
+            )
+
+          if (dateCompare !== 0) {
+            return dateCompare
+          }
+
+          return a.start_time.localeCompare(
+            b.start_time
+          )
+        }
+
+        case 'date_desc': {
+          const dateCompare =
+            b.firstRow.date.localeCompare(
+              a.firstRow.date
+            )
+
+          if (dateCompare !== 0) {
+            return dateCompare
+          }
+
+          return b.start_time.localeCompare(
+            a.start_time
+          )
+        }
+
+        default:
+          return 0
+      }
+    })
+
+    return result
+  }, [bookings, searchTerm, sortBy])
 
   /* =======================================================
-     AUTO-SCROLL TO NOTIFICATION TARGET
-  ======================================================= */
-
-  useEffect(() => {
-    if (
-      !highlightedReference ||
-      filteredBookings.length === 0
-    ) {
-      return
-    }
-
-    const target =
-      document.getElementById(
-        `booking-${highlightedReference}`
-      )
-
-    if (!target) {
-      return
-    }
-
-    const timer =
-      setTimeout(() => {
-        target.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        })
-      }, 150)
-
-    return () =>
-      clearTimeout(timer)
-  }, [
-    highlightedReference,
-    filteredBookings,
-  ])
-
-  /* =======================================================
-     CLEAR FILTERS
-  ======================================================= */
-
-  const hasFilters =
-    search.trim() !== '' ||
-    courtFilter !== 'all' ||
-    dateFilter !== '' ||
-    statusFilter !== 'all'
-    sortBy !== 'newest'
-
-  function clearFilters() {
-    setSearch('')
-    setCourtFilter('all')
-    setDateFilter('')
-    setStatusFilter('all')
-    setPaymentTab('pending')
-    setSortBy('newest')
-    setHighlightedReference(null)
-  }
-
-  /* =======================================================
-     PAYMENT TAB HANDLER
-  ======================================================= */
-
-  function handlePaymentTabChange(
-    tab: PaymentTab
-  ) {
-    setPaymentTab(tab)
-    setHighlightedReference(null)
-  }
-
-  /* =======================================================
-     ACTION HANDLER
+     ACTION
   ======================================================= */
 
   async function handleAction() {
@@ -814,282 +351,35 @@ export default function Reservations() {
       action,
     } = actionTarget
 
-    if (!booking.booking_reference) {
-      setError(
-        'Booking reference is missing.'
-      )
-      setActionTarget(null)
-      return
-    }
-
     try {
       setActionLoading(true)
       setError('')
 
-      if (
-        action === 'verify'
-      ) {
+      if (action === 'verify') {
         await verifyBookingPayment(
           booking.booking_reference
         )
       }
 
-      if (
-        action === 'reject'
-      ) {
+      if (action === 'reject') {
         await rejectBookingPayment(
           booking.booking_reference
         )
       }
 
-      if (
-        action === 'cancel'
-      ) {
-        await cancelBooking(
-          booking.booking_reference,
-          booking.firstRow.id
-        )
-      }
-
       setActionTarget(null)
 
-      await load()
+      await loadPayments()
     } catch (err) {
       console.error(err)
 
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to update booking.'
+          : 'Failed to update payment.'
       )
     } finally {
       setActionLoading(false)
-    }
-  }
-
-  /* =======================================================
-     OPEN RESCHEDULE
-  ======================================================= */
-
-  function openReschedule(
-    booking: BookingGroup
-  ) {
-    if (
-      booking.status !==
-        'confirmed' ||
-      booking.payment_status !==
-        'verified'
-    ) {
-      return
-    }
-
-    setError('')
-
-    setRescheduleBooking(
-      booking
-    )
-
-    setRescheduleDate(
-      booking.firstRow.date
-    )
-
-    setRescheduleCourtId(
-      booking.firstRow.court_id
-    )
-
-    setRescheduleSlots([])
-
-    setSelectedRescheduleSlots(
-      []
-    )
-
-    loadRescheduleSlots(
-      booking.firstRow.court_id,
-      booking.firstRow.date
-    )
-  }
-
-  /* =======================================================
-     LOAD RESCHEDULE SLOTS
-  ======================================================= */
-
-  async function loadRescheduleSlots(
-    courtId: string,
-    date: string
-  ) {
-    if (!courtId || !date) {
-      setRescheduleSlots([])
-      setSelectedRescheduleSlots(
-        []
-      )
-      return
-    }
-
-    try {
-      setRescheduleLoading(true)
-      setError('')
-
-      const slots =
-        await getAvailableSlots(
-          courtId,
-          date
-        )
-
-      setRescheduleSlots(
-        slots
-      )
-
-      setSelectedRescheduleSlots(
-        []
-      )
-    } catch (err) {
-      console.error(err)
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to load available slots.'
-      )
-
-      setRescheduleSlots([])
-    } finally {
-      setRescheduleLoading(false)
-    }
-  }
-
-  /* =======================================================
-     TOGGLE RESCHEDULE SLOT
-  ======================================================= */
-
-  function toggleRescheduleSlot(
-    slot: TimeSlot
-  ) {
-    if (!slot.available) {
-      return
-    }
-
-    setSelectedRescheduleSlots(
-      (current) => {
-        const exists =
-          current.some(
-            (item) =>
-              item.start_time ===
-                slot.start_time &&
-              item.end_time ===
-                slot.end_time
-          )
-
-        if (exists) {
-          return current.filter(
-            (item) =>
-              item.start_time !==
-                slot.start_time ||
-              item.end_time !==
-                slot.end_time
-          )
-        }
-
-        if (
-          rescheduleBooking &&
-          current.length >=
-            rescheduleBooking.slotCount
-        ) {
-          return current
-        }
-
-        return [
-          ...current,
-          slot,
-        ].sort((a, b) =>
-          a.start_time.localeCompare(
-            b.start_time
-          )
-        )
-      }
-    )
-  }
-
-  /* =======================================================
-     HANDLE RESCHEDULE
-  ======================================================= */
-
-  async function handleReschedule() {
-    if (!rescheduleBooking) {
-      return
-    }
-
-    if (
-      !rescheduleBooking
-        .booking_reference
-    ) {
-      setError(
-        'Booking reference is missing.'
-      )
-      return
-    }
-
-    if (
-      selectedRescheduleSlots.length !==
-      rescheduleBooking.slotCount
-    ) {
-      setError(
-        `Please select exactly ${
-          rescheduleBooking.slotCount
-        } time slot${
-          rescheduleBooking.slotCount >
-          1
-            ? 's'
-            : ''
-        }.`
-      )
-      return
-    }
-
-    try {
-      setRescheduleSaving(true)
-      setError('')
-
-      const newSlots =
-        selectedRescheduleSlots.map(
-          (slot) => ({
-            court_id:
-              rescheduleCourtId,
-            date:
-              rescheduleDate,
-            start_time:
-              slot.start_time,
-            end_time:
-              slot.end_time,
-          })
-        )
-
-      await adminRescheduleBooking(
-        rescheduleBooking.booking_reference,
-        newSlots
-      )
-
-      setRescheduleBooking(
-        null
-      )
-
-      setRescheduleDate('')
-      setRescheduleCourtId('')
-      setRescheduleSlots([])
-      setSelectedRescheduleSlots(
-        []
-      )
-
-      await load()
-    } catch (err) {
-      console.error(err)
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to reschedule booking.'
-      )
-    } finally {
-      setRescheduleSaving(false)
     }
   }
 
@@ -1100,15 +390,9 @@ export default function Reservations() {
   function getActionTitle(
     action: ActionType
   ) {
-    if (action === 'verify') {
-      return 'Verify Payment'
-    }
-
-    if (action === 'reject') {
-      return 'Reject Payment'
-    }
-
-    return 'Cancel Booking'
+    return action === 'verify'
+      ? 'Verify Payment'
+      : 'Reject Payment'
   }
 
   function getActionDescription(
@@ -1118,1006 +402,549 @@ export default function Reservations() {
       return 'This will mark the entire booking as paid and verified.'
     }
 
-    if (action === 'reject') {
-      return 'This will reject the payment and cancel the entire booking so the reserved slots become available again.'
-    }
-
-    return 'This will cancel the entire booking and release all reserved slots.'
+    return 'This will reject the payment, cancel the entire booking, and release all reserved slots.'
   }
 
-  /* =======================================================
-     PAYMENT BADGE
-  ======================================================= */
+  /* =========================================================
+     LOADING
+  ========================================================= */
 
-  function getPaymentBadge(
-    status: BookingGroup['payment_status']
-  ) {
-    if (
-      status === 'verified'
-    ) {
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-green-400/20 bg-green-400/10 px-2.5 py-1 text-[10px] font-semibold text-green-400">
-          <span className="text-[9px]">
-            ✓
-          </span>
-          Verified
-        </span>
-      )
-    }
-
-    if (
-      status === 'rejected'
-    ) {
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-red-400/20 bg-red-400/10 px-2.5 py-1 text-[10px] font-semibold text-red-400">
-          <span className="text-[9px]">
-            ✕
-          </span>
-          Rejected
-        </span>
-      )
-    }
-
+  if (loading) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/20 bg-yellow-400/10 px-2.5 py-1 text-[10px] font-semibold text-yellow-300">
-        <span className="text-[9px]">
-          ⏳
-        </span>
-        Pending
-      </span>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Pending Payments
+          </h1>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Review and verify customer payment submissions.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-10 text-center">
+          <div className="text-sm text-gray-500">
+            Loading pending payments...
+          </div>
+        </div>
+      </div>
     )
   }
 
-  /* =======================================================
-     STATUS BADGE
-  ======================================================= */
-
-  function getStatusBadge(
-    status: BookingGroup['status']
-  ) {
-    if (
-      status === 'cancelled'
-    ) {
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-paper px-2.5 py-1 text-[10px] font-semibold text-muted">
-          <span className="h-1.5 w-1.5 rounded-full bg-muted" />
-          Cancelled
-        </span>
-      )
-    }
-
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-400/20 bg-blue-400/10 px-2.5 py-1 text-[10px] font-semibold text-blue-400">
-        <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
-        Confirmed
-      </span>
-    )
-  }
-
-  /* =======================================================
-     PAYMENT TAB BUTTON
-  ======================================================= */
-
-  function getPaymentTabClass(
-    tab: PaymentTab
-  ) {
-    if (paymentTab !== tab) {
-      return 'border-transparent bg-transparent text-muted hover:bg-paper hover:text-ink'
-    }
-
-    if (tab === 'pending') {
-      return 'border-yellow-400/20 bg-yellow-400/10 text-yellow-300 shadow-sm'
-    }
-
-    if (tab === 'verified') {
-      return 'border-green-400/20 bg-green-400/10 text-green-400 shadow-sm'
-    }
-
-    return 'border-red-400/20 bg-red-400/10 text-red-400 shadow-sm'
-  }
-
-  /* =======================================================
+  /* =========================================================
      RENDER
-  ======================================================= */
+  ========================================================= */
 
   return (
-    <main className="pr-page">
-      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className="space-y-6">
+      {/* ===================================================
+          HEADER
+      =================================================== */}
 
-        {/* HEADER */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Pending Payments
+          </h1>
 
-        <section className="mb-7">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <p className="mt-1 text-sm text-gray-500">
+            Review and verify customer payment submissions.
+          </p>
+        </div>
 
-            <div className="min-w-0">
-              <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
-                <span>
-                  Admin
-                </span>
+        <button
+          type="button"
+          onClick={loadPayments}
+          disabled={loading}
+          className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+        >
+          {loading
+            ? 'Refreshing...'
+            : 'â†» Refresh'}
+        </button>
+      </div>
 
-                <span className="text-line">
-                  /
-                </span>
+      {/* ===================================================
+          SEARCH / SORT
+      =================================================== */}
 
-                <span className="text-court">
-                  Reservations
-                </span>
-              </div>
-
-              <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-                Reservations
-              </h1>
-
-              <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted">
-                Manage and monitor customer court reservations.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={load}
-              disabled={loading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-muted transition hover:border-court/30 hover:text-court disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-            >
-              <span
-                className={
-                  loading
-                    ? 'animate-spin'
-                    : ''
-                }
-              >
-                ↻
-              </span>
-
-              {loading
-                ? 'Refreshing...'
-                : 'Refresh'}
-            </button>
-
-          </div>
-        </section>
-
-        {/* SUMMARY */}
-
-        {!loading && (
-          <section className="mb-6 grid gap-3 sm:grid-cols-3 sm:gap-4">
-
-            <div className="pr-card p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
-                Total
-              </p>
-
-              <div className="mt-1 flex items-end justify-between gap-3">
-                <p className="font-display text-2xl font-bold text-ink">
-                  {bookings.length}
-                </p>
-
-                <span className="text-xs text-muted">
-                  bookings
-                </span>
-              </div>
-            </div>
-
-            <div className="pr-card p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
-                Confirmed
-              </p>
-
-              <div className="mt-1 flex items-end justify-between gap-3">
-                <p className="font-display text-2xl font-bold text-blue-400">
-                  {confirmedCount}
-                </p>
-
-                <span className="text-xs text-muted">
-                  active
-                </span>
-              </div>
-            </div>
-
-            <div className="pr-card p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
-                Pending Payment
-              </p>
-
-              <div className="mt-1 flex items-end justify-between gap-3">
-                <p className="font-display text-2xl font-bold text-yellow-300">
-                  {pendingPaymentCount}
-                </p>
-
-                <span className="text-xs text-muted">
-                  awaiting
-                </span>
-              </div>
-            </div>
-
-          </section>
-        )}
-
-        {/* SEARCH + FILTER */}
-
-        <section className="pr-card mb-6 p-4 sm:p-5">
-
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
-                Search & Filters
-              </p>
-
-              <p className="mt-1 text-xs text-muted">
-                Find reservations quickly using booking, customer, court, date, or payment details.
-              </p>
-            </div>
-
-            {hasFilters && (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="inline-flex items-center justify-center rounded-lg border border-line bg-paper px-3 py-2 text-[10px] font-semibold text-muted transition hover:border-court/20 hover:text-court"
-              >
-                Clear Filters
-              </button>
-            )}
-          </div>
-
-          {/* PAYMENT TABS */}
-
-          <div className="mb-5">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <label className="text-xs font-semibold text-ink">
-                Payment Status
-              </label>
-
-              <span className="text-[10px] text-muted">
-                Select payment queue
-              </span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-1 rounded-2xl border border-line bg-paper p-1.5">
-
-              <button
-                type="button"
-                onClick={() =>
-                  handlePaymentTabChange(
-                    'pending'
-                  )
-                }
-                className={`inline-flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 transition ${getPaymentTabClass(
-                  'pending'
-                )}`}
-              >
-                <span className="text-[10px] font-bold uppercase tracking-[0.08em]">
-                  Pending
-                </span>
-
-                <span className="font-display text-lg font-bold">
-                  {pendingPaymentCount}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handlePaymentTabChange(
-                    'verified'
-                  )
-                }
-                className={`inline-flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 transition ${getPaymentTabClass(
-                  'verified'
-                )}`}
-              >
-                <span className="text-[10px] font-bold uppercase tracking-[0.08em]">
-                  Verified
-                </span>
-
-                <span className="font-display text-lg font-bold">
-                  {verifiedPaymentCount}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handlePaymentTabChange(
-                    'rejected'
-                  )
-                }
-                className={`inline-flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 transition ${getPaymentTabClass(
-                  'rejected'
-                )}`}
-              >
-                <span className="text-[10px] font-bold uppercase tracking-[0.08em]">
-                  Rejected
-                </span>
-
-                <span className="font-display text-lg font-bold">
-                  {rejectedPaymentCount}
-                </span>
-              </button>
-
-            </div>
-          </div>
-
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px_auto]">
           {/* SEARCH */}
 
-          <div className="mb-4">
+          <div>
             <label
-              htmlFor="reservation-search"
-              className="mb-2 block text-xs font-semibold text-ink"
+              htmlFor="payment-search"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500"
             >
-              Search
+              Search Payments
             </label>
 
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">
-                ⌕
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                ðŸ”Ž
               </span>
 
               <input
-                id="reservation-search"
+                id="payment-search"
                 type="text"
-                value={search}
+                value={searchTerm}
                 onChange={(event) =>
-                  setSearch(
+                  setSearchTerm(
                     event.target.value
                   )
                 }
-                placeholder="Booking reference, customer name, phone, or court..."
-                className="w-full rounded-xl border border-line bg-paper py-3 pl-9 pr-4 text-sm text-ink outline-none placeholder:text-muted/60 focus:border-court/40"
+                placeholder="Booking reference, customer name, or phone..."
+                className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-10 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
+
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSearchTerm('')
+                  }
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="Clear search"
+                >
+                  âœ•
+                </button>
+              )}
             </div>
-          </div>
-
-          {/* FILTER GRID */}
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-
-            {/* STATUS */}
-
-            <div>
-              <label
-                htmlFor="reservation-status"
-                className="mb-2 block text-xs font-semibold text-ink"
-              >
-                Reservation Status
-              </label>
-
-              <select
-                id="reservation-status"
-                value={statusFilter}
-                onChange={(event) =>
-                  setStatusFilter(
-                    event.target.value as StatusFilter
-                  )
-                }
-                className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
-              >
-                <option value="all">
-                  All Status
-                </option>
-
-                <option value="confirmed">
-                  Confirmed ({confirmedCount})
-                </option>
-
-                <option value="cancelled">
-                  Cancelled ({cancelledCount})
-                </option>
-              </select>
-            </div>
-
-            {/* COURT */}
-
-            <div>
-              <label
-                htmlFor="reservation-court"
-                className="mb-2 block text-xs font-semibold text-ink"
-              >
-                Court
-              </label>
-
-              <select
-                id="reservation-court"
-                value={courtFilter}
-                onChange={(event) =>
-                  setCourtFilter(
-                    event.target.value
-                  )
-                }
-                className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
-              >
-                <option value="all">
-                  All Courts
-                </option>
-
-                {courtOptions.map(
-                  (court) => (
-                    <option
-                      key={court}
-                      value={court}
-                    >
-                      {court}
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
-
-            {/* DATE */}
-
-            <div>
-              <label
-                htmlFor="reservation-date"
-                className="mb-2 block text-xs font-semibold text-ink"
-              >
-                Booking Date
-              </label>
-
-              <input
-                id="reservation-date"
-                type="date"
-                value={dateFilter}
-                onChange={(event) =>
-                  setDateFilter(
-                    event.target.value
-                  )
-                }
-                className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
-              />
-            </div>
-
           </div>
 
           {/* SORT */}
 
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label
+              htmlFor="payment-sort"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500"
+            >
+              Sort By
+            </label>
 
-            <div>
-              <label
-                htmlFor="reservation-sort"
-                className="mb-2 block text-xs font-semibold text-ink"
-              >
-                Sort By
-              </label>
+            <select
+              id="payment-sort"
+              value={sortBy}
+              onChange={(event) =>
+                setSortBy(
+                  event.target.value as SortOption
+                )
+              }
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="newest">
+                Newest payment submission
+              </option>
 
-              <select
-                id="reservation-sort"
-                value={sortBy}
-                onChange={(event) =>
-                  setSortBy(
-                    event.target.value as SortOption
-                  )
-                }
-                className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
-              >
-                <option value="newest">
-                  Newest Added
-                </option>
+              <option value="oldest">
+                Oldest payment submission
+              </option>
 
-                <option value="oldest">
-                  Oldest Added
-                </option>
+              <option value="highest">
+                Highest amount
+              </option>
 
-                <option value="booking_earliest">
-                  Booking Date: Earliest
-                </option>
+              <option value="lowest">
+                Lowest amount
+              </option>
 
-                <option value="booking_latest">
-                  Booking Date: Latest
-                </option>
+              <option value="date_asc">
+                Booking date: Earliest
+              </option>
 
-                <option value="amount_high">
-                  Amount: Highest
-                </option>
+              <option value="date_desc">
+                Booking date: Latest
+              </option>
+            </select>
+          </div>
 
-                <option value="amount_low">
-                  Amount: Lowest
-                </option>
-              </select>
+          {/* RESULT COUNT */}
+
+          <div className="flex items-end">
+            <div className="w-full rounded-lg bg-gray-50 px-4 py-2.5 text-sm text-gray-600 lg:w-auto">
+              <span className="font-semibold text-gray-900">
+                {filteredBookings.length}
+              </span>
+
+              <span className="mx-1">
+                of
+              </span>
+
+              <span className="font-semibold text-gray-900">
+                {bookings.length}
+              </span>
+
+              <span className="ml-1">
+                bookings
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {searchTerm && (
+          <div className="mt-3 text-xs text-gray-500">
+            Showing results for{' '}
+            <span className="font-semibold text-gray-700">
+              "{searchTerm}"
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ===================================================
+          COUNT
+      =================================================== */}
+
+      <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-5 py-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-yellow-700">
+          Awaiting verification
+        </div>
+
+        <div className="mt-1 text-2xl font-bold text-yellow-900">
+          {bookings.length}
+        </div>
+
+        <div className="mt-1 text-sm text-yellow-700">
+          {bookings.length === 1
+            ? 'booking'
+            : 'bookings'}{' '}
+          currently waiting for payment review.
+        </div>
+      </div>
+
+      {/* ===================================================
+          ERROR
+      =================================================== */}
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* ===================================================
+          EMPTY â€” NO PAYMENTS
+      =================================================== */}
+
+      {bookings.length === 0 && (
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center">
+          <div className="text-4xl">
+            âœ…
+          </div>
+
+          <h2 className="mt-3 text-lg font-semibold text-gray-900">
+            No pending payments
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            All submitted payments have already
+            been processed.
+          </p>
+
+          <button
+            type="button"
+            onClick={loadPayments}
+            className="mt-5 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            Refresh
+          </button>
+        </div>
+      )}
+
+      {/* ===================================================
+          EMPTY â€” SEARCH RESULT
+      =================================================== */}
+
+      {bookings.length > 0 &&
+        filteredBookings.length === 0 && (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center">
+            <div className="text-4xl">
+              ðŸ”Ž
             </div>
 
-            <div className="flex items-end">
-              <div className="w-full rounded-xl border border-line bg-paper px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-                    {paymentTab ===
-                    'pending'
-                      ? 'Pending Results'
-                      : paymentTab ===
-                        'verified'
-                      ? 'Verified Results'
-                      : 'Rejected Results'}
-                  </span>
+            <h2 className="mt-3 text-lg font-semibold text-gray-900">
+              No matching payments
+            </h2>
 
-                  <span className="font-display text-lg font-bold text-court">
-                    {filteredBookings.length}
-                  </span>
+            <p className="mt-1 text-sm text-gray-500">
+              No pending payment matches your
+              current search.
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                setSearchTerm('')
+              }
+              className="mt-5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+            >
+              Clear Search
+            </button>
+          </div>
+        )}
+
+      {/* ===================================================
+          BOOKINGS
+      =================================================== */}
+
+      {filteredBookings.length > 0 && (
+        <div className="space-y-4">
+          {filteredBookings.map((booking) => {
+            const firstRow =
+              booking.firstRow
+
+            const paymentProof =
+              booking.rows.find(
+                (row) =>
+                  row.payment_proof_url
+              )
+                ?.payment_proof_url ??
+              null
+
+            return (
+              <div
+                key={booking.key}
+                className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+              >
+                {/* =========================================
+                    HEADER
+                ========================================= */}
+
+                <div className="border-b border-gray-100 px-5 py-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-base font-bold text-gray-900">
+                          {booking.booking_reference ||
+                            'No booking reference'}
+                        </span>
+
+                        <span className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
+                          â³ Pending
+                        </span>
+                      </div>
+
+                      <p className="mt-1 text-xs text-gray-400">
+                        Submitted{' '}
+                        {new Date(
+                          firstRow.created_at
+                        ).toLocaleString()}
+                      </p>
+                    </div>
+
+                    <div className="text-left lg:text-right">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                        Total
+                      </div>
+
+                      <div className="text-xl font-bold text-gray-900">
+                        {formatCurrency(
+                          booking.totalAmount
+                        )}
+                      </div>
+
+                      <div className="text-xs text-gray-500">
+                        {booking.slotCount}{' '}
+                        {booking.slotCount ===
+                        1
+                          ? 'hour'
+                          : 'hours'}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <p className="mt-0.5 text-[10px] text-muted">
-                  {filteredBookings.length === 1
-                    ? 'reservation matches'
-                    : 'reservations match'}
-                  {' '}your current filters.
-                </p>
-              </div>
-            </div>
+                {/* =========================================
+                    DETAILS
+                ========================================= */}
 
-          </div>
+                <div className="grid gap-5 px-5 py-5 md:grid-cols-2 xl:grid-cols-4">
+                  {/* CUSTOMER */}
 
-        </section>
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                      Customer
+                    </div>
 
-        {/* ERROR */}
+                    <div className="mt-1 font-semibold text-gray-900">
+                      {getCustomerName(
+                        firstRow
+                      )}
+                    </div>
 
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-300">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5">
-                ⚠
-              </span>
+                    {firstRow.guest_phone && (
+                      <div className="mt-1 text-sm text-gray-500">
+                        {firstRow.guest_phone}
+                      </div>
+                    )}
 
-              <p>{error}</p>
-            </div>
-          </div>
-        )}
+                    {firstRow.user_id && (
+                      <div className="mt-1 text-xs text-blue-600">
+                        Registered customer
+                      </div>
+                    )}
 
-        {/* LOADING */}
+                    {!firstRow.user_id && (
+                      <div className="mt-1 text-xs text-orange-600">
+                        Guest / Walk-in
+                      </div>
+                    )}
+                  </div>
 
-        {loading && (
-          <div className="pr-card p-10 text-center">
-            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-paper text-court">
-              <span className="animate-spin">
-                ↻
-              </span>
-            </div>
+                  {/* COURT */}
 
-            <p className="text-sm font-medium text-ink">
-              Loading reservations...
-            </p>
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                      Court
+                    </div>
 
-            <p className="mt-1 text-xs text-muted">
-              Please wait while we fetch the latest bookings.
-            </p>
-          </div>
-        )}
+                    <div className="mt-1 font-semibold text-gray-900">
+                      {firstRow.courts?.name ||
+                        'Unknown court'}
+                    </div>
+                  </div>
 
-        {/* EMPTY */}
+                  {/* SCHEDULE */}
 
-        {!loading &&
-          filteredBookings.length ===
-            0 && (
-            <div className="rounded-2xl border border-dashed border-line bg-surface p-10 text-center">
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                      Schedule
+                    </div>
 
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-paper text-2xl text-court">
-                {paymentTab ===
-                'pending'
-                  ? '⏳'
-                  : paymentTab ===
-                    'verified'
-                  ? '✓'
-                  : '✕'}
-              </div>
+                    <div className="mt-1 font-semibold text-gray-900">
+                      {formatDate(
+                        firstRow.date
+                      )}
+                    </div>
 
-              <h2 className="mt-4 font-display text-lg font-semibold text-ink">
-                {bookings.length === 0
-                  ? 'No reservations yet'
-                  : paymentTab ===
-                    'pending'
-                  ? 'No pending payments'
-                  : paymentTab ===
-                    'verified'
-                  ? 'No verified payments'
-                  : 'No rejected payments'}
-              </h2>
+                    <div className="mt-1 text-sm text-gray-500">
+                      {formatTime(
+                        booking.start_time
+                      )}{' '}
+                      â€“{' '}
+                      {formatTime(
+                        booking.end_time
+                      )}
+                    </div>
+                  </div>
 
-              <p className="text-sm font-semibold text-ink">
-                  {paymentTab === 'pending'
-                    ? 'No pending payments yet'
-                    : paymentTab === 'verified'
-                      ? 'No verified payments yet'
-                      : 'No rejected payments yet'}
-                </p>
+                  {/* PAYMENT */}
 
-                <p className="mt-1 text-xs text-muted">
-                  {paymentTab === 'pending'
-                    ? 'Pending payment transactions will appear here.'
-                    : paymentTab === 'verified'
-                      ? 'Verified payment transactions will appear here.'
-                      : 'Rejected payment transactions will appear here.'}
-                </p>
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                      Payment
+                    </div>
 
-              {bookings.length > 0 &&
-                hasFilters && (
-                  <button
-                    type="button"
-                    onClick={clearFilters}
-                    className="mt-5 rounded-xl border border-court/30 bg-court/10 px-4 py-2.5 text-xs font-semibold text-court transition hover:bg-court/15"
-                  >
-                    Clear Filters
-                  </button>
+                    <div className="mt-1 font-semibold capitalize text-gray-900">
+                      {firstRow.payment_type ===
+                      'deposit'
+                        ? 'Deposit'
+                        : 'Full payment'}
+                    </div>
+
+                    <div className="mt-1 text-sm text-gray-500">
+                      Amount due:{' '}
+                      {formatCurrency(
+                        booking.totalAmount
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* =========================================
+                    PAYMENT PROOF
+                ========================================= */}
+
+                {paymentProof && (
+                  <div className="border-t border-gray-100 px-5 py-5">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                      Payment Proof
+                    </div>
+
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedImage(
+                            paymentProof
+                          )
+                        }
+                        className="group relative block overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
+                      >
+                        <img
+                          src={paymentProof}
+                          alt="Payment proof"
+                          className="h-48 w-full object-contain transition group-hover:scale-[1.02] sm:h-56 sm:w-80"
+                        />
+
+                        <div className="absolute inset-x-0 bottom-0 bg-black/60 px-3 py-2 text-left text-xs font-medium text-white opacity-0 transition group-hover:opacity-100">
+                          Click to view full size
+                        </div>
+                      </button>
+                    </div>
+                  </div>
                 )}
 
-            </div>
-          )}
+                {!paymentProof && (
+                  <div className="border-t border-gray-100 px-5 py-4">
+                    <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
+                      âš  No payment proof has been uploaded
+                      for this booking.
+                    </div>
+                  </div>
+                )}
 
-        {/* BOOKINGS */}
+                {/* =========================================
+                    ACTIONS
+                ========================================= */}
 
-        {!loading &&
-          filteredBookings.length >
-            0 && (
-            <div className="space-y-4">
-
-              {filteredBookings.map(
-                (booking) => {
-                  const firstRow =
-                    booking.firstRow
-
-                  const paymentProof =
-                    booking.rows.find(
-                      (row) =>
-                        row.payment_proof_url
-                    )
-                      ?.payment_proof_url ??
-                    null
-
-                  const isHighlighted =
-                    highlightedReference ===
-                    booking.booking_reference
-
-                  return (
-                    <article
-                      id={
-                        booking.booking_reference
-                          ? `booking-${booking.booking_reference}`
-                          : undefined
-                      }
-                      key={booking.key}
-                      className={
-                        'pr-card overflow-hidden transition duration-300 ' +
-                        (
-                          isHighlighted
-                            ? 'border-court bg-court/[0.06] shadow-[0_0_0_2px_rgba(163,219,56,0.25),0_0_30px_rgba(163,219,56,0.12)]'
-                            : 'hover:border-court/20'
+                <div className="flex flex-col gap-2 border-t border-gray-100 bg-gray-50 px-5 py-4 sm:flex-row sm:flex-wrap">
+                  {paymentProof && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedImage(
+                          paymentProof
                         )
                       }
+                      className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
                     >
-
-                      {/* TOP */}
-
-                      <div className="border-b border-line px-4 py-4 sm:px-5">
-
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-
-                          <div className="min-w-0">
-
-                            <div className="flex flex-wrap items-center gap-2">
-
-                              <span className="font-display text-sm font-bold text-ink sm:text-base">
-                                {booking.booking_reference ||
-                                  'No booking reference'}
-                              </span>
-
-                              {getStatusBadge(
-                                booking.status
-                              )}
-
-                              {getPaymentBadge(
-                                booking.payment_status
-                              )}
-
-                              {isHighlighted && (
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-court/30 bg-court/10 px-2.5 py-1 text-[10px] font-bold text-court">
-                                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-court" />
-                                  Notification Match
-                                </span>
-                              )}
-
-                            </div>
-
-                            <p className="mt-2 text-[11px] text-muted">
-                              Created{' '}
-                              {new Date(
-                                firstRow.created_at
-                              ).toLocaleString()}
-                            </p>
-
-                          </div>
-
-                          <div className="rounded-xl border border-line bg-paper px-4 py-3 lg:min-w-[150px] lg:text-right">
-
-                            <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-                              Total
-                            </div>
-
-                            <div className="mt-0.5 font-display text-xl font-bold text-court">
-                              {formatCurrency(
-                                booking.totalAmount
-                              )}
-                            </div>
-
-                            <div className="mt-0.5 text-[10px] text-muted">
-                              {booking.slotCount}{' '}
-                              {booking.slotCount ===
-                              1
-                                ? 'hour'
-                                : 'hours'}
-                            </div>
-
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                      {/* DETAILS */}
-
-                      <div className="grid gap-4 px-4 py-5 sm:px-5 md:grid-cols-2 xl:grid-cols-4">
-
-                        {/* CUSTOMER */}
-
-                        <div className="min-w-0">
-
-                          <div className="mb-2 flex items-center gap-2">
-
-                            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-paper text-xs text-court">
-                              ◉
-                            </div>
-
-                            <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-                              Customer
-                            </span>
-
-                          </div>
-
-                          <div className="font-semibold text-ink">
-                            {getCustomerName(
-                              firstRow
-                            )}
-                          </div>
-
-                          {firstRow.guest_phone && (
-                            <div className="mt-1 text-xs text-muted">
-                              {firstRow.guest_phone}
-                            </div>
-                          )}
-
-                          {firstRow.user_id && (
-                            <div className="mt-1 inline-flex rounded-full border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 text-[9px] font-semibold text-blue-400">
-                              Registered account
-                            </div>
-                          )}
-
-                        </div>
-
-                        {/* COURT */}
-
-                        <div className="min-w-0">
-
-                          <div className="mb-2 flex items-center gap-2">
-
-                            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-paper text-xs text-court">
-                              🏓
-                            </div>
-
-                            <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-                              Court
-                            </span>
-
-                          </div>
-
-                          <div className="font-semibold text-ink">
-                            {firstRow.courts?.name ||
-                              'Unknown court'}
-                          </div>
-
-                        </div>
-
-                        {/* DATE / TIME */}
-
-                        <div className="min-w-0">
-
-                          <div className="mb-2 flex items-center gap-2">
-
-                            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-paper text-xs text-blue-400">
-                              ◷
-                            </div>
-
-                            <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-                              Schedule
-                            </span>
-
-                          </div>
-
-                          <div className="font-semibold text-ink">
-                            {formatDate(
-                              firstRow.date
-                            )}
-                          </div>
-
-                          <div className="mt-1 text-xs text-blue-400">
-                            {formatTime(
-                              booking.start_time
-                            )}{' '}
-                            –{' '}
-                            {formatTime(
-                              booking.end_time
-                            )}
-                          </div>
-
-                        </div>
-
-                        {/* PAYMENT */}
-
-                        <div className="min-w-0">
-
-                          <div className="mb-2 flex items-center gap-2">
-
-                            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-paper text-xs text-court">
-                              ₱
-                            </div>
-
-                            <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-                              Payment
-                            </span>
-
-                          </div>
-
-                          <div className="font-semibold capitalize text-ink">
-                            {firstRow.payment_type}
-                          </div>
-
-                          <div className="mt-1 text-xs text-muted">
-                            {booking.payment_status ===
-                            'verified'
-                              ? 'Payment verified'
-                              : booking.payment_status ===
-                                'rejected'
-                              ? 'Payment rejected'
-                              : 'Pending payment verification'}
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                      {/* ACTIONS */}
-
-                      <div className="flex flex-col gap-2 border-t border-line bg-paper/60 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
-
-                        {paymentProof && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSelectedImage(
-                                paymentProof
-                              )
-                            }
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-2.5 text-xs font-semibold text-muted transition hover:border-blue-400/30 hover:text-blue-400 sm:w-auto"
-                          >
-                            <span>
-                              👁
-                            </span>
-
-                            View Payment Proof
-                          </button>
-                        )}
-
-                        {booking.status ===
-                          'confirmed' &&
-                          booking.payment_status ===
-                            'pending' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setActionTarget({
-                                  booking,
-                                  action:
-                                    'verify',
-                                })
-                              }
-                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-court px-4 py-2.5 text-xs font-bold text-paper transition hover:-translate-y-0.5 hover:bg-court-dark sm:w-auto"
-                            >
-                              <span>
-                                ✓
-                              </span>
-
-                              Verify Payment
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setActionTarget({
-                                  booking,
-                                  action:
-                                    'reject',
-                                })
-                              }
-                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-400/10 px-4 py-2.5 text-xs font-semibold text-red-400 transition hover:border-red-400/40 hover:bg-red-400/15 sm:w-auto"
-                            >
-                              <span>
-                                ✕
-                              </span>
-
-                              Reject Payment
-                            </button>
-                          </>
-                        )}
-
-                        {booking.status ===
-                          'confirmed' &&
-                          booking.payment_status ===
-                            'verified' && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openReschedule(
-                                booking
-                              )
-                            }
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-court/30 bg-court/10 px-4 py-2.5 text-xs font-semibold text-court transition hover:bg-court/15 sm:w-auto"
-                          >
-                            <span>
-                              ↻
-                            </span>
-
-                            Reschedule
-                          </button>
-                        )}
-
-                        {booking.status ===
-                          'confirmed' && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setActionTarget({
-                                booking,
-                                action:
-                                  'cancel',
-                              })
-                            }
-                            className="inline-flex w-full items-center justify-center rounded-xl border border-line bg-surface px-4 py-2.5 text-xs font-medium text-muted transition hover:border-red-400/30 hover:text-red-400 sm:w-auto"
-                          >
-                            Cancel Booking
-                          </button>
-                        )}
-
-                        {booking.status ===
-                          'cancelled' && (
-                          <span className="flex items-center gap-2 text-xs text-muted">
-                            <span className="h-1.5 w-1.5 rounded-full bg-muted" />
-                            This booking has been cancelled.
-                          </span>
-                        )}
-
-                      </div>
-
-                    </article>
-                  )
-                }
-              )}
-
-            </div>
-          )}
-
-        {/* FOOTER */}
-
-        {!loading &&
-          filteredBookings.length >
-            0 && (
-            <footer className="py-6 text-center">
-              <p className="text-[10px] text-muted">
-                Showing{' '}
-                {filteredBookings.length}{' '}
-                {filteredBookings.length ===
-                1
-                  ? 'booking'
-                  : 'bookings'}
-              </p>
-            </footer>
-          )}
-
-      </div>
+                      ðŸ‘ View Payment Proof
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActionTarget({
+                        booking,
+                        action: 'verify',
+                      })
+                    }
+                    className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700"
+                  >
+                    âœ“ Verify Payment
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActionTarget({
+                        booking,
+                        action: 'reject',
+                      })
+                    }
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+                  >
+                    âœ• Reject Payment
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* ===================================================
           PAYMENT PROOF MODAL
@@ -2125,36 +952,32 @@ export default function Reservations() {
 
       {selectedImage && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
           onClick={() =>
             setSelectedImage(null)
           }
         >
-
           <div
             className="relative max-h-[90vh] max-w-4xl"
             onClick={(event) =>
               event.stopPropagation()
             }
           >
-
             <button
               type="button"
               onClick={() =>
                 setSelectedImage(null)
               }
-              aria-label="Close payment proof"
-              className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/70 text-lg text-white transition hover:bg-black"
+              className="absolute right-2 top-2 z-10 rounded-full bg-black/70 px-3 py-2 text-white hover:bg-black"
             >
-              ✕
+              âœ•
             </button>
 
             <img
               src={selectedImage}
               alt="Payment proof"
-              className="max-h-[85vh] max-w-full rounded-2xl border border-line object-contain shadow-2xl"
+              className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl"
             />
-
           </div>
         </div>
       )}
@@ -2164,149 +987,118 @@ export default function Reservations() {
       =================================================== */}
 
       {actionTarget && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            {/* MODAL CONTENT */}
 
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
-
-            <div className="border-b border-line px-5 py-5 sm:px-6">
-
-              <div className="flex items-start gap-3">
-
-                <div
-                  className={
-                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm ' +
-                    (actionTarget.action ===
-                    'verify'
-                      ? 'border border-court/20 bg-court/10 text-court'
-                      : 'border border-red-400/20 bg-red-400/10 text-red-400')
-                  }
-                >
+            <div className="p-6">
+              <div
+                className={`flex h-12 w-12 items-center justify-center rounded-full ${
+                  actionTarget.action ===
+                  'verify'
+                    ? 'bg-green-100'
+                    : 'bg-red-100'
+                }`}
+              >
+                <span className="text-xl">
                   {actionTarget.action ===
                   'verify'
-                    ? '✓'
-                    : '!'}
-                </div>
-
-                <div>
-                  <h2 className="font-display text-lg font-bold text-ink">
-                    {getActionTitle(
-                      actionTarget.action
-                    )}
-                  </h2>
-
-                  <p className="mt-1 text-xs leading-5 text-muted">
-                    {getActionDescription(
-                      actionTarget.action
-                    )}
-                  </p>
-                </div>
-
+                    ? 'âœ“'
+                    : 'âœ•'}
+                </span>
               </div>
 
-            </div>
+              <h2 className="mt-4 text-lg font-bold text-gray-900">
+                {getActionTitle(
+                  actionTarget.action
+                )}
+              </h2>
 
-            <div className="px-5 py-5 sm:px-6">
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                {getActionDescription(
+                  actionTarget.action
+                )}
+              </p>
 
-              <div className="rounded-xl border border-line bg-paper p-4">
+              {/* BOOKING SUMMARY */}
 
-                <div className="mb-3 flex items-center justify-between gap-3">
-
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-                    Booking
-                  </span>
-
-                  {getStatusBadge(
-                    actionTarget.booking.status
-                  )}
-
+              <div className="mt-4 rounded-xl bg-gray-50 p-4">
+                <div className="text-xs uppercase tracking-wide text-gray-400">
+                  Booking
                 </div>
 
-                <div className="font-display text-sm font-bold text-ink">
+                <div className="mt-1 font-semibold text-gray-900">
                   {actionTarget.booking
                     .booking_reference ||
                     'No reference'}
                 </div>
 
-                <div className="mt-3 space-y-1.5 text-xs text-muted">
-
-                  <div>
-                    {getCustomerName(
-                      actionTarget.booking
-                        .firstRow
-                    )}
-                  </div>
-
-                  <div>
-                    {actionTarget.booking
-                      .firstRow.courts
-                      ?.name ||
-                      'Unknown court'}
-                  </div>
-
-                  <div>
-                    {formatDate(
-                      actionTarget.booking
-                        .firstRow.date
-                    )}
-                  </div>
-
-                  <div className="text-blue-400">
-                    {formatTime(
-                      actionTarget.booking
-                        .start_time
-                    )}{' '}
-                    –{' '}
-                    {formatTime(
-                      actionTarget.booking
-                        .end_time
-                    )}
-                  </div>
-
+                <div className="mt-2 text-sm text-gray-600">
+                  {getCustomerName(
+                    actionTarget.booking
+                      .firstRow
+                  )}
                 </div>
 
-                <div className="mt-4 border-t border-line pt-3">
-
-                  <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-                    Total Amount
-                  </div>
-
-                  <div className="mt-0.5 font-display text-lg font-bold text-court">
-                    {formatCurrency(
-                      actionTarget.booking
-                        .totalAmount
-                    )}
-                  </div>
-
+                <div className="mt-1 text-sm text-gray-600">
+                  {actionTarget.booking
+                    .firstRow.courts
+                    ?.name ||
+                    'Unknown court'}
                 </div>
 
+                <div className="mt-1 text-sm text-gray-600">
+                  {formatDate(
+                    actionTarget.booking
+                      .firstRow.date
+                  )}
+                </div>
+
+                <div className="text-sm text-gray-600">
+                  {formatTime(
+                    actionTarget.booking
+                      .start_time
+                  )}{' '}
+                  â€“{' '}
+                  {formatTime(
+                    actionTarget.booking
+                      .end_time
+                  )}
+                </div>
+
+                <div className="mt-2 font-semibold text-gray-900">
+                  {formatCurrency(
+                    actionTarget.booking
+                      .totalAmount
+                  )}
+                </div>
               </div>
-
             </div>
 
-            <div className="flex flex-col-reverse gap-2 border-t border-line bg-paper/50 p-4 sm:flex-row sm:justify-end">
+            {/* MODAL BUTTONS */}
 
+            <div className="flex flex-col-reverse gap-2 border-t border-gray-100 p-4 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 disabled={actionLoading}
                 onClick={() =>
                   setActionTarget(null)
                 }
-                className="w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-xs font-semibold text-muted transition hover:border-court/20 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
               >
-                Keep Booking
+                Keep Payment Pending
               </button>
 
               <button
                 type="button"
                 disabled={actionLoading}
                 onClick={handleAction}
-                className={
-                  'w-full rounded-xl px-4 py-2.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto ' +
-                  (actionTarget.action ===
+                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
+                  actionTarget.action ===
                   'verify'
-                    ? 'bg-court text-paper hover:bg-court-dark'
-                    : 'bg-red-500 text-white hover:bg-red-600')
-                }
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
                 {actionLoading
                   ? 'Processing...'
@@ -2314,484 +1106,10 @@ export default function Reservations() {
                       actionTarget.action
                     )}
               </button>
-
             </div>
-
           </div>
         </div>
       )}
-
-      {/* ===================================================
-          RESCHEDULE MODAL
-      =================================================== */}
-
-      {rescheduleBooking && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
-          onClick={() => {
-            if (!rescheduleSaving) {
-              setRescheduleBooking(
-                null
-              )
-            }
-          }}
-        >
-
-          <div
-            className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
-            onClick={(event) =>
-              event.stopPropagation()
-            }
-          >
-
-            <div className="border-b border-line px-5 py-5 sm:px-6">
-
-              <div className="flex items-start justify-between gap-4">
-
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-court">
-                    Admin
-                  </p>
-
-                  <h2 className="mt-1 font-display text-xl font-bold text-ink">
-                    Reschedule Booking
-                  </h2>
-
-                  <p className="mt-1 text-xs text-muted">
-                    {rescheduleBooking.booking_reference}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={rescheduleSaving}
-                  onClick={() =>
-                    setRescheduleBooking(
-                      null
-                    )
-                  }
-                  className="rounded-lg px-2 py-1 text-muted transition hover:bg-paper hover:text-ink disabled:opacity-50"
-                >
-                  ✕
-                </button>
-
-              </div>
-
-            </div>
-
-            <div className="border-b border-line bg-paper/50 px-5 py-4 sm:px-6">
-
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
-                Current Schedule
-              </p>
-
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-
-                <div>
-                  <p className="text-[10px] text-muted">
-                    Date
-                  </p>
-
-                  <p className="mt-0.5 text-sm font-semibold text-ink">
-                    {formatDate(
-                      rescheduleBooking
-                        .firstRow
-                        .date
-                    )}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[10px] text-muted">
-                    Court
-                  </p>
-
-                  <p className="mt-0.5 text-sm font-semibold text-ink">
-                    {rescheduleBooking
-                      .firstRow
-                      .courts
-                      ?.name ||
-                      'Court'}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[10px] text-muted">
-                    Slots
-                  </p>
-
-                  <p className="mt-0.5 text-sm font-semibold text-ink">
-                    {rescheduleBooking.slotCount}
-                  </p>
-                </div>
-
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-
-                {rescheduleBooking.rows.map(
-                  (row) => (
-                    <span
-                      key={row.id}
-                      className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] text-muted"
-                    >
-                      {formatTime(
-                        row.start_time
-                      )}{' '}
-                      –{' '}
-                      {formatTime(
-                        row.end_time
-                      )}
-                    </span>
-                  )
-                )}
-
-              </div>
-
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-
-              <div className="space-y-5">
-
-                <div>
-                  <label
-                    htmlFor="reschedule-date"
-                    className="mb-2 block text-xs font-semibold text-ink"
-                  >
-                    New Date
-                  </label>
-
-                  <input
-                    id="reschedule-date"
-                    type="date"
-                    value={
-                      rescheduleDate
-                    }
-                    onChange={(
-                      event
-                    ) => {
-                      const value =
-                        event.target
-                          .value
-
-                      setRescheduleDate(
-                        value
-                      )
-
-                      if (
-                        value &&
-                        rescheduleCourtId
-                      ) {
-                        loadRescheduleSlots(
-                          rescheduleCourtId,
-                          value
-                        )
-                      }
-                    }}
-                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-sm text-ink outline-none focus:border-court/40"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="reschedule-court"
-                    className="mb-2 block text-xs font-semibold text-ink"
-                  >
-                    New Court
-                  </label>
-
-                  <select
-                    id="reschedule-court"
-                    value={
-                      rescheduleCourtId
-                    }
-                    onChange={(
-                      event
-                    ) => {
-                      const value =
-                        event.target
-                          .value
-
-                      setRescheduleCourtId(
-                        value
-                      )
-
-                      if (
-                        value &&
-                        rescheduleDate
-                      ) {
-                        loadRescheduleSlots(
-                          value,
-                          rescheduleDate
-                        )
-                      }
-                    }}
-                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-sm text-ink outline-none focus:border-court/40"
-                  >
-                    <option value="">
-                      Select court
-                    </option>
-
-                    {courts.map(
-                      (court) => (
-                        <option
-                          key={
-                            court.id
-                          }
-                          value={
-                            court.id
-                          }
-                        >
-                          {court.name}
-                        </option>
-                      )
-                    )}
-                  </select>
-                </div>
-
-                <div className="rounded-xl border border-court/20 bg-court/5 px-4 py-3">
-
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-
-                    <p className="text-xs font-semibold text-court">
-                      Select{' '}
-                      {
-                        rescheduleBooking.slotCount
-                      }{' '}
-                      slot
-                      {rescheduleBooking.slotCount >
-                      1
-                        ? 's'
-                        : ''}
-                    </p>
-
-                    <span className="text-[10px] text-muted">
-                      {
-                        selectedRescheduleSlots.length
-                      }
-                      /
-                      {
-                        rescheduleBooking.slotCount
-                      }{' '}
-                      selected
-                    </span>
-
-                  </div>
-
-                  <p className="mt-1 text-[11px] leading-5 text-muted">
-                    The number of slots must remain the same as the original booking.
-                  </p>
-
-                </div>
-
-                <div>
-
-                  <div className="mb-2 flex items-center justify-between gap-3">
-
-                    <label className="text-xs font-semibold text-ink">
-                      Available Time Slots
-                    </label>
-
-                    {!rescheduleLoading &&
-                      rescheduleSlots.length >
-                        0 && (
-                        <span className="text-[10px] text-muted">
-                          {
-                            rescheduleSlots.filter(
-                              (slot) =>
-                                slot.available
-                            ).length
-                          }{' '}
-                          available
-                        </span>
-                      )}
-
-                  </div>
-
-                  {rescheduleLoading ? (
-                    <div className="rounded-xl border border-line bg-paper px-4 py-10 text-center text-xs text-muted">
-                      <span className="mr-2 inline-block animate-spin">
-                        ↻
-                      </span>
-                      Loading available slots...
-                    </div>
-                  ) : rescheduleSlots.length ===
-                    0 ? (
-                    <div className="rounded-xl border border-line bg-paper px-4 py-10 text-center">
-
-                      <div className="text-xl">
-                        🕐
-                      </div>
-
-                      <p className="mt-2 text-xs font-medium text-ink">
-                        No slots available
-                      </p>
-
-                      <p className="mt-1 text-[10px] text-muted">
-                        Select another date or court.
-                      </p>
-
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-
-                      {rescheduleSlots.map(
-                        (slot) => {
-                          const selected =
-                            selectedRescheduleSlots.some(
-                              (item) =>
-                                item.start_time ===
-                                  slot.start_time &&
-                                item.end_time ===
-                                  slot.end_time
-                            )
-
-                          const disabledByLimit =
-                            !selected &&
-                            selectedRescheduleSlots.length >=
-                              rescheduleBooking.slotCount
-
-                          return (
-                            <button
-                              key={`${slot.start_time}-${slot.end_time}`}
-                              type="button"
-                              disabled={
-                                !slot.available ||
-                                disabledByLimit
-                              }
-                              onClick={() =>
-                                toggleRescheduleSlot(
-                                  slot
-                                )
-                              }
-                              className={
-                                'rounded-xl border px-3 py-3 text-left transition ' +
-                                (
-                                  selected
-                                    ? 'border-court bg-court/10 text-court'
-                                    : slot.available &&
-                                        !disabledByLimit
-                                      ? 'border-line bg-paper text-ink hover:border-court/30 hover:bg-court/5'
-                                      : 'cursor-not-allowed border-line bg-paper opacity-40'
-                                )
-                              }
-                            >
-
-                              <div className="flex items-center justify-between gap-2">
-
-                                <p className="text-xs font-semibold">
-                                  {formatTime(
-                                    slot.start_time
-                                  )}
-                                </p>
-
-                                {selected && (
-                                  <span className="text-[10px]">
-                                    ✓
-                                  </span>
-                                )}
-
-                              </div>
-
-                              <p className="mt-0.5 text-[10px] opacity-70">
-                                {formatTime(
-                                  slot.end_time
-                                )}
-                              </p>
-
-                              {!slot.available && (
-                                <p className="mt-1 text-[9px] font-semibold uppercase">
-                                  {slot.status ===
-                                  'pending'
-                                    ? 'Pending'
-                                    : 'Booked'}
-                                </p>
-                              )}
-
-                              {selected && (
-                                <p className="mt-1 text-[9px] font-semibold uppercase">
-                                  Selected
-                                </p>
-                              )}
-
-                            </button>
-                          )
-                        }
-                      )}
-
-                    </div>
-                  )}
-
-                </div>
-
-                <div className="rounded-xl border border-yellow-400/20 bg-yellow-400/5 px-4 py-3">
-
-                  <div className="flex items-start gap-2">
-
-                    <span className="mt-0.5 text-yellow-300">
-                      ⚠
-                    </span>
-
-                    <div>
-                      <p className="text-xs font-semibold text-yellow-200">
-                        Admin Reschedule
-                      </p>
-
-                      <p className="mt-1 text-[10px] leading-5 text-muted">
-                        This will immediately move the booking. The booking reference and verified payment will remain unchanged.
-                      </p>
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>
-
-            <div className="flex flex-col-reverse gap-2 border-t border-line bg-paper/50 p-4 sm:flex-row sm:justify-end sm:px-6">
-
-              <button
-                type="button"
-                disabled={
-                  rescheduleSaving
-                }
-                onClick={() =>
-                  setRescheduleBooking(
-                    null
-                  )
-                }
-                className="w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-xs font-semibold text-muted transition hover:border-court/20 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-              >
-                Close
-              </button>
-
-              <button
-                type="button"
-                disabled={
-                  rescheduleSaving ||
-                  selectedRescheduleSlots.length !==
-                    rescheduleBooking.slotCount
-                }
-                onClick={
-                  handleReschedule
-                }
-                className="w-full rounded-xl bg-court px-4 py-2.5 text-xs font-bold text-paper transition hover:bg-court-dark disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-              >
-                {rescheduleSaving
-                  ? 'Rescheduling...'
-                  : 'Confirm Reschedule'}
-              </button>
-
-            </div>
-
-          </div>
-
-        </div>
-      )}
-
-    </main>
+    </div>
   )
 }
