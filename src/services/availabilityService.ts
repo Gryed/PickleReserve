@@ -1,3 +1,4 @@
+
 import { supabase } from '../lib/supabase'
 import type {
   Reservation,
@@ -699,6 +700,14 @@ export interface RescheduleRequest {
   new_start_time: string
   new_end_time: string
 
+  /*
+   * Multi-slot reschedule support.
+   *
+   * Migration 031/034 may populate this field.
+   * Older single-slot requests can leave it null.
+   */
+  new_slots?: RescheduleSlot[] | null
+
   status:
     | 'pending'
     | 'approved'
@@ -807,6 +816,112 @@ export async function getRescheduleRequestByBooking(
   }
 
   return data as RescheduleRequest | null
+}
+
+/* =========================================================
+   ADMIN RESCHEDULE REQUESTS
+========================================================= */
+
+/**
+ * Get all pending customer reschedule requests.
+ *
+ * Uses the secure SECURITY DEFINER RPC
+ * created in migration 034.
+ */
+export async function getPendingRescheduleRequests(): Promise<
+  RescheduleRequest[]
+> {
+  const { data, error } =
+    await supabase.rpc(
+      'get_pending_reschedule_requests'
+    )
+
+  if (error) {
+    console.error(
+      'Error fetching pending reschedule requests:',
+      error
+    )
+
+    throw error
+  }
+
+  return (data ?? []) as RescheduleRequest[]
+}
+
+/**
+ * Approve a customer reschedule request.
+ *
+ * The database RPC performs:
+ * - admin authorization
+ * - booking validation
+ * - conflict checking
+ * - schedule update
+ * - request approval
+ */
+export async function approveRescheduleRequest(
+  requestId: string
+): Promise<void> {
+  const id =
+    requestId?.trim()
+
+  if (!id) {
+    throw new Error(
+      'Reschedule request ID is required.'
+    )
+  }
+
+  const { error } =
+    await supabase.rpc(
+      'approve_reschedule_request',
+      {
+        p_request_id: id,
+      }
+    )
+
+  if (error) {
+    console.error(
+      'Error approving reschedule request:',
+      error
+    )
+
+    throw error
+  }
+}
+
+/**
+ * Reject a customer reschedule request.
+ */
+export async function rejectRescheduleRequest(
+  requestId: string,
+  rejectionReason?: string
+): Promise<void> {
+  const id =
+    requestId?.trim()
+
+  if (!id) {
+    throw new Error(
+      'Reschedule request ID is required.'
+    )
+  }
+
+  const { error } =
+    await supabase.rpc(
+      'reject_reschedule_request',
+      {
+        p_request_id: id,
+        p_rejection_reason:
+          rejectionReason?.trim() || null,
+      }
+    )
+
+  if (error) {
+    console.error(
+      'Error rejecting reschedule request:',
+      error
+    )
+
+    throw error
+  }
 }
 
 /* =========================================================
@@ -938,22 +1053,27 @@ export async function adminRescheduleBooking(
     console.error(
       'RESCHEDULE RPC ERROR'
     )
+
     console.error(
       'message:',
       error.message
     )
+
     console.error(
       'details:',
       error.details
     )
+
     console.error(
       'hint:',
       error.hint
     )
+
     console.error(
       'code:',
       error.code
     )
+
     console.error(
       'full error:',
       error

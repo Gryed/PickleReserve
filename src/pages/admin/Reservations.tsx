@@ -1,3 +1,4 @@
+
 import {
   useEffect,
   useMemo,
@@ -6,12 +7,18 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import {
   adminRescheduleBooking,
+  approveRescheduleRequest,
   cancelBooking,
+  getAdminRescheduledBookingReferences,
   getAllReservationsAdmin,
   getAvailableSlots,
+  getPendingRescheduleRequests,
   rejectBookingPayment,
+  rejectRescheduleRequest,
   verifyBookingPayment,
-  getAdminRescheduledBookingReferences,
+} from '../../services/availabilityService'
+import type {
+  RescheduleRequest,
 } from '../../services/availabilityService'
 import { getCourts } from '../../services/courtService'
 import type { Court } from '../../types/court'
@@ -48,8 +55,13 @@ type BookingGroup = {
   end_time: string
   totalAmount: number
   slotCount: number
-  payment_status: 'pending' | 'verified' | 'rejected'
-  status: 'confirmed' | 'cancelled'
+  payment_status:
+    | 'pending'
+    | 'verified'
+    | 'rejected'
+  status:
+    | 'confirmed'
+    | 'cancelled'
 }
 
 type Filter =
@@ -57,6 +69,7 @@ type Filter =
   | 'confirmed'
   | 'rescheduled'
   | 'cancelled'
+  | 'reschedule_requests'
 
 type PaymentFilter =
   | 'all'
@@ -286,13 +299,17 @@ export default function Reservations() {
   const [rows, setRows] =
     useState<ReservationRow[]>([])
 
-  const [rescheduledReferences, setRescheduledReferences] =
-    useState<Set<string>>(
-      new Set()
-    )
+  const [
+    rescheduledReferences,
+    setRescheduledReferences,
+  ] = useState<Set<string>>(
+    new Set()
+  )
 
-  const [highlightedReference, setHighlightedReference] =
-    useState<string | null>(null)
+  const [
+    highlightedReference,
+    setHighlightedReference,
+  ] = useState<string | null>(null)
 
   const [loading, setLoading] =
     useState(true)
@@ -307,7 +324,8 @@ export default function Reservations() {
   const [search, setSearch] =
     useState('')
 
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] =
+    useState<Filter>('all')
 
   const [paymentFilter, setPaymentFilter] =
     useState<PaymentFilter>('all')
@@ -331,32 +349,86 @@ export default function Reservations() {
     useState<ActionTarget | null>(null)
 
   /* =======================================================
-     RESCHEDULE STATE
+     CUSTOMER RESCHEDULE REQUEST STATE
   ======================================================= */
 
-  const [rescheduleBooking, setRescheduleBooking] =
-    useState<BookingGroup | null>(null)
+  const [
+    pendingRescheduleRequests,
+    setPendingRescheduleRequests,
+  ] = useState<RescheduleRequest[]>([])
 
-  const [rescheduleDate, setRescheduleDate] =
-    useState('')
+  const [
+    rescheduleRequestsLoading,
+    setRescheduleRequestsLoading,
+  ] = useState(false)
 
-  const [rescheduleCourtId, setRescheduleCourtId] =
-    useState('')
+  const [
+    rescheduleRequestActionLoading,
+    setRescheduleRequestActionLoading,
+  ] = useState(false)
 
-  const [rescheduleSlots, setRescheduleSlots] =
-    useState<TimeSlot[]>([])
+  const [
+    selectedRescheduleRequest,
+    setSelectedRescheduleRequest,
+  ] = useState<RescheduleRequest | null>(
+    null
+  )
 
-  const [selectedRescheduleSlots, setSelectedRescheduleSlots] =
-    useState<TimeSlot[]>([])
+  const [
+    rejectionReason,
+    setRejectionReason,
+  ] = useState('')
+
+  const [
+    rescheduleRequestAction,
+    setRescheduleRequestAction,
+  ] = useState<
+    'approve' | 'reject' | null
+  >(null)
+
+  /* =======================================================
+     ADMIN DIRECT RESCHEDULE STATE
+  ======================================================= */
+
+  const [
+    rescheduleBooking,
+    setRescheduleBooking,
+  ] = useState<BookingGroup | null>(
+    null
+  )
+
+  const [
+    rescheduleDate,
+    setRescheduleDate,
+  ] = useState('')
+
+  const [
+    rescheduleCourtId,
+    setRescheduleCourtId,
+  ] = useState('')
+
+  const [
+    rescheduleSlots,
+    setRescheduleSlots,
+  ] = useState<TimeSlot[]>([])
+
+  const [
+    selectedRescheduleSlots,
+    setSelectedRescheduleSlots,
+  ] = useState<TimeSlot[]>([])
 
   const [courts, setCourts] =
     useState<Court[]>([])
 
-  const [rescheduleLoading, setRescheduleLoading] =
-    useState(false)
+  const [
+    rescheduleLoading,
+    setRescheduleLoading,
+  ] = useState(false)
 
-  const [rescheduleSaving, setRescheduleSaving] =
-    useState(false)
+  const [
+    rescheduleSaving,
+    setRescheduleSaving,
+  ] = useState(false)
 
   /* =======================================================
      LOAD RESERVATIONS
@@ -424,9 +496,44 @@ export default function Reservations() {
     }
   }
 
+  /* =======================================================
+     LOAD PENDING RESCHEDULE REQUESTS
+  ======================================================= */
+
+  async function loadPendingRescheduleRequests() {
+    try {
+      setRescheduleRequestsLoading(
+        true
+      )
+
+      const data =
+        await getPendingRescheduleRequests()
+
+      setPendingRescheduleRequests(
+        data
+      )
+    } catch (err) {
+      console.error(
+        'Failed to load pending reschedule requests:',
+        err
+      )
+
+      showError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to load reschedule requests.'
+      )
+    } finally {
+      setRescheduleRequestsLoading(
+        false
+      )
+    }
+  }
+
   useEffect(() => {
     load()
     loadCourts()
+    loadPendingRescheduleRequests()
   }, [])
 
   /* =======================================================
@@ -478,7 +585,8 @@ export default function Reservations() {
       tab === 'all' ||
       tab === 'confirmed' ||
       tab === 'rescheduled' ||
-      tab === 'cancelled'
+      tab === 'cancelled' ||
+      tab === 'reschedule_requests'
     ) {
       setFilter(tab)
     }
@@ -527,17 +635,12 @@ export default function Reservations() {
       }, 5000)
 
     return () => {
-      window.clearTimeout(
-        timer
-      )
-
-      window.clearTimeout(
-        clearTimer
-      )
+      window.clearTimeout(timer)
+      window.clearTimeout(clearTimer)
     }
   }, [
     searchParams,
-    filteredBookingsLength(bookings),
+    bookings.length,
   ])
 
   /* =======================================================
@@ -566,7 +669,7 @@ export default function Reservations() {
     }, [rows])
 
   /* =======================================================
-     HAS ACTIVE FILTERS
+     FILTER STATE
   ======================================================= */
 
   const hasFilters =
@@ -587,9 +690,7 @@ export default function Reservations() {
     setCourtFilter('all')
     setBookingDate('')
     setSortBy('newest')
-    setHighlightedReference(
-      null
-    )
+    setHighlightedReference(null)
     setSearchParams({})
   }
 
@@ -601,11 +702,11 @@ export default function Reservations() {
     nextFilter: Filter
   ) {
     setFilter(nextFilter)
-    setHighlightedReference(
-      null
-    )
+    setHighlightedReference(null)
 
-    if (nextFilter === 'all') {
+    if (
+      nextFilter === 'all'
+    ) {
       setSearchParams({})
       return
     }
@@ -621,6 +722,13 @@ export default function Reservations() {
 
   const filteredBookings =
     useMemo(() => {
+      if (
+        filter ===
+        'reschedule_requests'
+      ) {
+        return []
+      }
+
       const query =
         search
           .trim()
@@ -675,7 +783,7 @@ export default function Reservations() {
               filter === 'all' ||
               (
                 filter ===
-                  'rescheduled'
+                'rescheduled'
                   ? rescheduled
                   : booking.status ===
                     filter
@@ -819,7 +927,7 @@ export default function Reservations() {
     ])
 
   /* =======================================================
-     ACTION HANDLER
+     PAYMENT / BOOKING ACTION
   ======================================================= */
 
   async function handleAction() {
@@ -857,11 +965,15 @@ export default function Reservations() {
       await load()
 
       if (action === 'verify') {
-        success('Payment verified')
+        success(
+          'Payment verified'
+        )
       }
 
       if (action === 'reject') {
-        success('Payment rejected')
+        success(
+          'Payment rejected'
+        )
       }
 
       if (action === 'cancel') {
@@ -903,7 +1015,80 @@ export default function Reservations() {
   }
 
   /* =======================================================
-     OPEN RESCHEDULE
+     CUSTOMER RESCHEDULE REQUEST ACTION
+  ======================================================= */
+
+  async function handleRescheduleRequestAction() {
+    if (
+      !selectedRescheduleRequest ||
+      !rescheduleRequestAction
+    ) {
+      return
+    }
+
+    try {
+      setRescheduleRequestActionLoading(
+        true
+      )
+
+      if (
+        rescheduleRequestAction ===
+        'approve'
+      ) {
+        await approveRescheduleRequest(
+          selectedRescheduleRequest.id
+        )
+
+        success(
+          `Reschedule request ${selectedRescheduleRequest.booking_reference} approved.`
+        )
+      }
+
+      if (
+        rescheduleRequestAction ===
+        'reject'
+      ) {
+        await rejectRescheduleRequest(
+          selectedRescheduleRequest.id,
+          rejectionReason
+        )
+
+        success(
+          `Reschedule request ${selectedRescheduleRequest.booking_reference} rejected.`
+        )
+      }
+
+      setSelectedRescheduleRequest(
+        null
+      )
+
+      setRescheduleRequestAction(
+        null
+      )
+
+      setRejectionReason('')
+
+      await Promise.all([
+        load(),
+        loadPendingRescheduleRequests(),
+      ])
+    } catch (err) {
+      console.error(err)
+
+      showError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to process reschedule request.'
+      )
+    } finally {
+      setRescheduleRequestActionLoading(
+        false
+      )
+    }
+  }
+
+  /* =======================================================
+     OPEN ADMIN RESCHEDULE
   ======================================================= */
 
   function openReschedule(
@@ -943,7 +1128,7 @@ export default function Reservations() {
   }
 
   /* =======================================================
-     LOAD RESCHEDULE SLOTS
+     LOAD ADMIN RESCHEDULE SLOTS
   ======================================================= */
 
   async function loadRescheduleSlots(
@@ -952,9 +1137,7 @@ export default function Reservations() {
   ) {
     if (!courtId || !date) {
       setRescheduleSlots([])
-      setSelectedRescheduleSlots(
-        []
-      )
+      setSelectedRescheduleSlots([])
       return
     }
 
@@ -990,7 +1173,7 @@ export default function Reservations() {
   }
 
   /* =======================================================
-     TOGGLE RESCHEDULE SLOT
+     TOGGLE ADMIN RESCHEDULE SLOT
   ======================================================= */
 
   function toggleRescheduleSlot(
@@ -1042,7 +1225,7 @@ export default function Reservations() {
   }
 
   /* =======================================================
-     HANDLE RESCHEDULE
+     ADMIN RESCHEDULE
   ======================================================= */
 
   async function handleReschedule() {
@@ -1104,16 +1287,11 @@ export default function Reservations() {
         newSlots
       )
 
-      setRescheduleBooking(
-        null
-      )
-
+      setRescheduleBooking(null)
       setRescheduleDate('')
       setRescheduleCourtId('')
       setRescheduleSlots([])
-      setSelectedRescheduleSlots(
-        []
-      )
+      setSelectedRescheduleSlots([])
 
       await load()
 
@@ -1121,11 +1299,6 @@ export default function Reservations() {
         'Booking rescheduled successfully'
       )
 
-      /*
-       * After a successful admin reschedule,
-       * immediately move to the RESCHEDULED tab
-       * and highlight the booking.
-       */
       setFilter('rescheduled')
 
       setSearchParams({
@@ -1293,6 +1466,25 @@ export default function Reservations() {
         'cancelled'
     ).length
 
+  const pendingRescheduleRequestCount =
+    pendingRescheduleRequests.length
+
+  /* =======================================================
+     REQUEST COURT NAME
+  ======================================================= */
+
+  function getRequestCourtName(
+    courtId: string
+  ) {
+    return (
+      courts.find(
+        (court) =>
+          court.id === courtId
+      )?.name ||
+      'Unknown Court'
+    )
+  }
+
   return (
     <main className="pr-page">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -1324,14 +1516,16 @@ export default function Reservations() {
               </h1>
 
               <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted">
-                Manage and monitor customer court
-                reservations.
+                Manage and monitor customer court reservations.
               </p>
             </div>
 
             <button
               type="button"
-              onClick={load}
+              onClick={() => {
+                load()
+                loadPendingRescheduleRequests()
+              }}
               disabled={loading}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-muted transition hover:border-court/30 hover:text-court disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
@@ -1358,7 +1552,7 @@ export default function Reservations() {
         ================================================= */}
 
         {!loading && (
-          <section className="mb-6 grid gap-3 sm:grid-cols-4 sm:gap-4">
+          <section className="mb-6 grid gap-3 sm:grid-cols-5 sm:gap-4">
 
             <div className="pr-card p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
@@ -1420,6 +1614,34 @@ export default function Reservations() {
 
                 <span className="text-xs text-muted">
                   inactive
+                </span>
+              </div>
+            </div>
+
+            <div
+              className={
+                'pr-card p-4 transition ' +
+                (
+                  pendingRescheduleRequestCount >
+                  0
+                    ? 'border-yellow-400/30'
+                    : ''
+                )
+              }
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                Reschedule Requests
+              </p>
+
+              <div className="mt-1 flex items-end justify-between gap-3">
+                <p className="font-display text-2xl font-bold text-yellow-300">
+                  {
+                    pendingRescheduleRequestCount
+                  }
+                </p>
+
+                <span className="text-xs text-muted">
+                  pending
                 </span>
               </div>
             </div>
@@ -1525,343 +1747,754 @@ export default function Reservations() {
               </span>
             </button>
 
+            <button
+              type="button"
+              onClick={() =>
+                handleFilterChange(
+                  'reschedule_requests'
+                )
+              }
+              className={
+                'rounded-xl px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.08em] transition ' +
+                (
+                  filter ===
+                  'reschedule_requests'
+                    ? 'bg-yellow-400/15 text-yellow-300'
+                    : 'text-muted hover:bg-paper hover:text-ink'
+                )
+              }
+            >
+              <span className="mr-1.5">
+                🔔
+              </span>
+
+              Reschedule Requests
+
+              <span
+                className={
+                  'ml-2 rounded-full px-1.5 py-0.5 ' +
+                  (
+                    pendingRescheduleRequestCount >
+                    0
+                      ? 'bg-yellow-400/15 text-yellow-300'
+                      : 'opacity-70'
+                  )
+                }
+              >
+                {
+                  pendingRescheduleRequestCount
+                }
+              </span>
+            </button>
+
           </div>
         </section>
+
+        {/* =================================================
+            CUSTOMER RESCHEDULE REQUESTS
+        ================================================= */}
+
+        {filter ===
+          'reschedule_requests' && (
+          <section className="mb-6">
+
+            {rescheduleRequestsLoading ? (
+              <div className="pr-card p-10 text-center">
+                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-paper text-yellow-300">
+                  <span className="animate-spin">
+                    ↻
+                  </span>
+                </div>
+
+                <p className="text-sm font-medium text-ink">
+                  Loading reschedule requests...
+                </p>
+
+                <p className="mt-1 text-xs text-muted">
+                  Checking for pending customer requests.
+                </p>
+              </div>
+            ) : pendingRescheduleRequests.length ===
+              0 ? (
+              <div className="rounded-2xl border border-dashed border-line bg-surface p-10 text-center">
+
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-paper text-2xl">
+                  ✓
+                </div>
+
+                <h2 className="mt-4 font-display text-lg font-semibold text-ink">
+                  No pending reschedule requests
+                </h2>
+
+                <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">
+                  Customer reschedule requests will appear here when they need admin approval.
+                </p>
+
+              </div>
+            ) : (
+              <div className="space-y-4">
+
+                <div className="flex flex-col gap-1">
+                  <h2 className="font-display text-lg font-bold text-ink">
+                    Pending Reschedule Requests
+                  </h2>
+
+                  <p className="text-xs text-muted">
+                    Review the requested schedule before approving or rejecting it.
+                  </p>
+                </div>
+
+                {pendingRescheduleRequests.map(
+                  (request) => {
+                    const oldCourtName =
+                      getRequestCourtName(
+                        request.old_court_id
+                      )
+
+                    const newCourtName =
+                      getRequestCourtName(
+                        request.new_court_id
+                      )
+
+                    return (
+                      <article
+                        key={request.id}
+                        className="pr-card overflow-hidden"
+                      >
+
+                        {/* REQUEST HEADER */}
+
+                        <div className="border-b border-line px-4 py-4 sm:px-5">
+
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+
+                                <span className="font-display text-sm font-bold text-ink sm:text-base">
+                                  {
+                                    request.booking_reference
+                                  }
+                                </span>
+
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/20 bg-yellow-400/10 px-2.5 py-1 text-[10px] font-semibold text-yellow-300">
+                                  <span>
+                                    ⏳
+                                  </span>
+                                  Pending Approval
+                                </span>
+
+                              </div>
+
+                              <p className="mt-2 text-[11px] text-muted">
+                                Requested{' '}
+                                {new Date(
+                                  request.created_at
+                                ).toLocaleString()}
+                              </p>
+                            </div>
+
+                            <div className="rounded-xl border border-yellow-400/20 bg-yellow-400/5 px-4 py-3 sm:text-right">
+
+                              <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+                                Request
+                              </div>
+
+                              <div className="mt-0.5 font-semibold text-yellow-300">
+                                Customer Reschedule
+                              </div>
+
+                            </div>
+
+                          </div>
+
+                        </div>
+
+                        {/* SCHEDULE COMPARISON */}
+
+                        <div className="grid gap-4 px-4 py-5 sm:px-5 lg:grid-cols-2">
+
+                          {/* CURRENT */}
+
+                          <div className="rounded-2xl border border-line bg-paper p-4">
+
+                            <div className="mb-4 flex items-center gap-2">
+
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-xs text-muted">
+                                ←
+                              </div>
+
+                              <div>
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+                                  Current Schedule
+                                </p>
+
+                                <p className="text-sm font-semibold text-ink">
+                                  Existing booking
+                                </p>
+                              </div>
+
+                            </div>
+
+                            <div className="space-y-3">
+
+                              <div>
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+                                  Date
+                                </p>
+
+                                <p className="mt-0.5 text-sm font-semibold text-ink">
+                                  {formatDate(
+                                    request.old_date
+                                  )}
+                                </p>
+                              </div>
+
+                              <div>
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+                                  Court
+                                </p>
+
+                                <p className="mt-0.5 text-sm font-semibold text-ink">
+                                  {oldCourtName}
+                                </p>
+                              </div>
+
+                              <div>
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+                                  Time
+                                </p>
+
+                                <p className="mt-0.5 text-sm font-semibold text-blue-400">
+                                  {formatTime(
+                                    request.old_start_time
+                                  )}{' '}
+                                  –{' '}
+                                  {formatTime(
+                                    request.old_end_time
+                                  )}
+                                </p>
+                              </div>
+
+                            </div>
+
+                          </div>
+
+                          {/* REQUESTED */}
+
+                          <div className="rounded-2xl border border-court/20 bg-court/5 p-4">
+
+                            <div className="mb-4 flex items-center gap-2">
+
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-court/20 bg-court/10 text-xs text-court">
+                                →
+                              </div>
+
+                              <div>
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-court">
+                                  Requested Schedule
+                                </p>
+
+                                <p className="text-sm font-semibold text-ink">
+                                  Customer request
+                                </p>
+                              </div>
+
+                            </div>
+
+                            <div className="space-y-3">
+
+                              <div>
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+                                  Date
+                                </p>
+
+                                <p className="mt-0.5 text-sm font-semibold text-ink">
+                                  {formatDate(
+                                    request.new_date
+                                  )}
+                                </p>
+                              </div>
+
+                              <div>
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+                                  Court
+                                </p>
+
+                                <p className="mt-0.5 text-sm font-semibold text-court">
+                                  {newCourtName}
+                                </p>
+                              </div>
+
+                              <div>
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+                                  Time
+                                </p>
+
+                                <p className="mt-0.5 text-sm font-semibold text-blue-400">
+                                  {formatTime(
+                                    request.new_start_time
+                                  )}{' '}
+                                  –{' '}
+                                  {formatTime(
+                                    request.new_end_time
+                                  )}
+                                </p>
+                              </div>
+
+                            </div>
+
+                          </div>
+
+                        </div>
+
+                        {/* MULTI SLOT INFORMATION */}
+
+                        {request.new_slots &&
+                          request.new_slots.length >
+                            0 && (
+                            <div className="border-t border-line px-4 py-4 sm:px-5">
+
+                              <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+                                Requested Slots
+                              </p>
+
+                              <div className="flex flex-wrap gap-2">
+
+                                {request.new_slots.map(
+                                  (
+                                    slot,
+                                    index
+                                  ) => (
+                                    <div
+                                      key={`${request.id}-${slot.court_id}-${slot.start_time}-${index}`}
+                                      className="rounded-xl border border-court/20 bg-court/5 px-3 py-2"
+                                    >
+                                      <p className="text-[10px] font-semibold text-court">
+                                        {
+                                          getRequestCourtName(
+                                            slot.court_id
+                                          )
+                                        }
+                                      </p>
+
+                                      <p className="mt-0.5 text-[10px] text-muted">
+                                        {formatDate(
+                                          slot.date
+                                        )}
+                                      </p>
+
+                                      <p className="mt-0.5 text-xs font-semibold text-blue-400">
+                                        {formatTime(
+                                          slot.start_time
+                                        )}{' '}
+                                        –{' '}
+                                        {formatTime(
+                                          slot.end_time
+                                        )}
+                                      </p>
+                                    </div>
+                                  )
+                                )}
+
+                              </div>
+
+                            </div>
+                          )}
+
+                        {/* ACTIONS */}
+
+                        <div className="flex flex-col gap-2 border-t border-line bg-paper/60 px-4 py-4 sm:flex-row sm:justify-end sm:px-5">
+
+                          <button
+                            type="button"
+                            disabled={
+                              rescheduleRequestActionLoading
+                            }
+                            onClick={() => {
+                              setSelectedRescheduleRequest(
+                                request
+                              )
+
+                              setRescheduleRequestAction(
+                                'reject'
+                              )
+
+                              setRejectionReason(
+                                ''
+                              )
+                            }}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-400/10 px-4 py-2.5 text-xs font-semibold text-red-400 transition hover:border-red-400/40 hover:bg-red-400/15 disabled:opacity-50 sm:w-auto"
+                          >
+                            <span>
+                              ✕
+                            </span>
+
+                            Reject
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={
+                              rescheduleRequestActionLoading
+                            }
+                            onClick={() => {
+                              setSelectedRescheduleRequest(
+                                request
+                              )
+
+                              setRescheduleRequestAction(
+                                'approve'
+                              )
+
+                              setRejectionReason(
+                                ''
+                              )
+                            }}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-court px-4 py-2.5 text-xs font-bold text-paper transition hover:-translate-y-0.5 hover:bg-court-dark disabled:opacity-50 sm:w-auto"
+                          >
+                            <span>
+                              ✓
+                            </span>
+
+                            Approve Reschedule
+                          </button>
+
+                        </div>
+
+                      </article>
+                    )
+                  }
+                )}
+
+              </div>
+            )}
+
+          </section>
+        )}
 
         {/* =================================================
             SEARCH & FILTERS
         ================================================= */}
 
-        <section className="pr-card mb-6 p-4 sm:p-5">
+        {filter !==
+          'reschedule_requests' && (
+          <section className="pr-card mb-6 p-4 sm:p-5">
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
-                Search & Filters
-              </p>
-
-              <p className="mt-1 text-xs text-muted">
-                Find reservations quickly using booking,
-                customer, court, date, or payment details.
-              </p>
-            </div>
-
-            <div className="flex w-full gap-2 sm:w-auto">
-
-              {hasFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="flex-1 rounded-xl border border-line bg-paper px-3 py-2.5 text-[10px] font-semibold text-muted transition hover:border-court/20 hover:text-court sm:flex-none"
-                >
-                  Clear
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowFilters(
-                    (current) =>
-                      !current
-                  )
-                }
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-court/30 bg-court/10 px-4 py-2.5 text-[10px] font-bold text-court transition hover:bg-court/15 sm:flex-none"
-              >
-                <span>
-                  ☷
-                </span>
-
-                {showFilters
-                  ? 'Hide Filters'
-                  : 'Filters'}
-              </button>
-
-            </div>
-          </div>
-
-          {/* SEARCH ALWAYS VISIBLE */}
-
-          <div className="mt-4">
-            <label
-              htmlFor="reservation-search"
-              className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
-            >
-              Search Reservations
-            </label>
-
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">
-                🔎
-              </span>
-
-              <input
-                id="reservation-search"
-                type="text"
-                value={search}
-                onChange={(event) =>
-                  setSearch(
-                    event.target.value
-                  )
-                }
-                placeholder="Booking reference, customer name, phone number, or court..."
-                className="w-full rounded-xl border border-line bg-paper py-3 pl-10 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-court/40"
-              />
-            </div>
-          </div>
-
-          {/* COLLAPSIBLE FILTERS */}
-
-          {showFilters && (
-            <div className="mt-4 border-t border-line pt-4">
-
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-
-                {/* RESERVATION STATUS */}
-
-                <div>
-                  <label
-                    htmlFor="reservation-status-filter"
-                    className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
-                  >
-                    Reservation Status
-                  </label>
-
-                  <select
-                    id="reservation-status-filter"
-                    value={filter}
-                    onChange={(event) =>
-                      handleFilterChange(
-                        event.target
-                          .value as Filter
-                      )
-                    }
-                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
-                  >
-                    <option value="all">
-                      All
-                    </option>
-
-                    <option value="confirmed">
-                      Confirmed
-                    </option>
-
-                    <option value="rescheduled">
-                      Rescheduled
-                    </option>
-
-                    <option value="cancelled">
-                      Cancelled
-                    </option>
-                  </select>
-                </div>
-
-                {/* PAYMENT STATUS */}
-
-                <div>
-                  <label
-                    htmlFor="payment-status-filter"
-                    className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
-                  >
-                    Payment Status
-                  </label>
-
-                  <select
-                    id="payment-status-filter"
-                    value={paymentFilter}
-                    onChange={(event) =>
-                      setPaymentFilter(
-                        event.target
-                          .value as PaymentFilter
-                      )
-                    }
-                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
-                  >
-                    <option value="all">
-                      All
-                    </option>
-
-                    <option value="pending">
-                      Pending
-                    </option>
-
-                    <option value="verified">
-                      Verified
-                    </option>
-
-                    <option value="rejected">
-                      Rejected
-                    </option>
-                  </select>
-                </div>
-
-                {/* COURT */}
-
-                <div>
-                  <label
-                    htmlFor="court-filter"
-                    className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
-                  >
-                    Court
-                  </label>
-
-                  <select
-                    id="court-filter"
-                    value={courtFilter}
-                    onChange={(event) =>
-                      setCourtFilter(
-                        event.target.value
-                      )
-                    }
-                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
-                  >
-                    <option value="all">
-                      All Courts
-                    </option>
-
-                    {courtOptions.map(
-                      (court) => (
-                        <option
-                          key={court}
-                          value={court}
-                        >
-                          {court}
-                        </option>
-                      )
-                    )}
-                  </select>
-                </div>
-
-                {/* BOOKING DATE */}
-
-                <div>
-                  <label
-                    htmlFor="booking-date-filter"
-                    className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
-                  >
-                    Booking Date
-                  </label>
-
-                  <input
-                    id="booking-date-filter"
-                    type="date"
-                    value={bookingDate}
-                    onChange={(event) =>
-                      setBookingDate(
-                        event.target.value
-                      )
-                    }
-                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
-                  />
-                </div>
-
-                {/* SORT */}
-
-                <div>
-                  <label
-                    htmlFor="reservation-sort"
-                    className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
-                  >
-                    Sort By
-                  </label>
-
-                  <select
-                    id="reservation-sort"
-                    value={sortBy}
-                    onChange={(event) =>
-                      setSortBy(
-                        event.target
-                          .value as SortOption
-                      )
-                    }
-                    className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
-                  >
-                    <option value="newest">
-                      Newest Added
-                    </option>
-
-                    <option value="oldest">
-                      Oldest Added
-                    </option>
-
-                    <option value="date_earliest">
-                      Booking Date: Earliest
-                    </option>
-
-                    <option value="date_latest">
-                      Booking Date: Latest
-                    </option>
-
-                    <option value="amount_highest">
-                      Amount: Highest
-                    </option>
-
-                    <option value="amount_lowest">
-                      Amount: Lowest
-                    </option>
-                  </select>
-                </div>
-
-              </div>
-
-              {/* FILTER RESULT */}
-
-              <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
-
-                <p className="text-[10px] text-muted">
-                  Showing{' '}
-                  <span className="font-semibold text-ink">
-                    {filteredBookings.length}
-                  </span>{' '}
-                  of{' '}
-                  <span className="font-semibold text-ink">
-                    {bookings.length}
-                  </span>{' '}
-                  bookings
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  Search & Filters
                 </p>
 
-                {hasFilters && (
-                  <span className="inline-flex w-fit rounded-full border border-court/20 bg-court/5 px-2.5 py-1 text-[9px] font-semibold text-court">
-                    Filters active
-                  </span>
-                )}
-
+                <p className="mt-1 text-xs text-muted">
+                  Find reservations quickly using booking, customer, court, date, or payment details.
+                </p>
               </div>
 
+              <div className="flex w-full gap-2 sm:w-auto">
+
+                {hasFilters && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="flex-1 rounded-xl border border-line bg-paper px-3 py-2.5 text-[10px] font-semibold text-muted transition hover:border-court/20 hover:text-court sm:flex-none"
+                  >
+                    Clear
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowFilters(
+                      (current) =>
+                        !current
+                    )
+                  }
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-court/30 bg-court/10 px-4 py-2.5 text-[10px] font-bold text-court transition hover:bg-court/15 sm:flex-none"
+                >
+                  <span>
+                    ☷
+                  </span>
+
+                  {showFilters
+                    ? 'Hide Filters'
+                    : 'Filters'}
+                </button>
+
+              </div>
             </div>
-          )}
 
-        </section>
+            <div className="mt-4">
+              <label
+                htmlFor="reservation-search"
+                className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+              >
+                Search Reservations
+              </label>
 
-        {/* =================================================
-            LOADING
-        ================================================= */}
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">
+                  🔎
+                </span>
 
-        {loading && (
-          <div className="pr-card p-10 text-center">
-            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-paper text-court">
-              <span className="animate-spin">
-                ↻
-              </span>
+                <input
+                  id="reservation-search"
+                  type="text"
+                  value={search}
+                  onChange={(event) =>
+                    setSearch(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Booking reference, customer name, phone number, or court..."
+                  className="w-full rounded-xl border border-line bg-paper py-3 pl-10 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-court/40"
+                />
+              </div>
             </div>
 
-            <p className="text-sm font-medium text-ink">
-              Loading reservations...
-            </p>
+            {showFilters && (
+              <div className="mt-4 border-t border-line pt-4">
 
-            <p className="mt-1 text-xs text-muted">
-              Please wait while we fetch the
-              latest bookings.
-            </p>
-          </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+
+                  <div>
+                    <label
+                      htmlFor="reservation-status-filter"
+                      className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+                    >
+                      Reservation Status
+                    </label>
+
+                    <select
+                      id="reservation-status-filter"
+                      value={filter}
+                      onChange={(event) =>
+                        handleFilterChange(
+                          event.target.value as Filter
+                        )
+                      }
+                      className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
+                    >
+                      <option value="all">
+                        All
+                      </option>
+
+                      <option value="confirmed">
+                        Confirmed
+                      </option>
+
+                      <option value="rescheduled">
+                        Rescheduled
+                      </option>
+
+                      <option value="cancelled">
+                        Cancelled
+                      </option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="payment-status-filter"
+                      className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+                    >
+                      Payment Status
+                    </label>
+
+                    <select
+                      id="payment-status-filter"
+                      value={paymentFilter}
+                      onChange={(event) =>
+                        setPaymentFilter(
+                          event.target
+                            .value as PaymentFilter
+                        )
+                      }
+                      className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
+                    >
+                      <option value="all">
+                        All
+                      </option>
+
+                      <option value="pending">
+                        Pending
+                      </option>
+
+                      <option value="verified">
+                        Verified
+                      </option>
+
+                      <option value="rejected">
+                        Rejected
+                      </option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="court-filter"
+                      className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+                    >
+                      Court
+                    </label>
+
+                    <select
+                      id="court-filter"
+                      value={courtFilter}
+                      onChange={(event) =>
+                        setCourtFilter(
+                          event.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
+                    >
+                      <option value="all">
+                        All Courts
+                      </option>
+
+                      {courtOptions.map(
+                        (court) => (
+                          <option
+                            key={court}
+                            value={court}
+                          >
+                            {court}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="booking-date-filter"
+                      className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+                    >
+                      Booking Date
+                    </label>
+
+                    <input
+                      id="booking-date-filter"
+                      type="date"
+                      value={bookingDate}
+                      onChange={(event) =>
+                        setBookingDate(
+                          event.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="reservation-sort"
+                      className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+                    >
+                      Sort By
+                    </label>
+
+                    <select
+                      id="reservation-sort"
+                      value={sortBy}
+                      onChange={(event) =>
+                        setSortBy(
+                          event.target
+                            .value as SortOption
+                        )
+                      }
+                      className="w-full rounded-xl border border-line bg-paper px-3 py-3 text-xs text-ink outline-none focus:border-court/40"
+                    >
+                      <option value="newest">
+                        Newest Added
+                      </option>
+
+                      <option value="oldest">
+                        Oldest Added
+                      </option>
+
+                      <option value="date_earliest">
+                        Booking Date: Earliest
+                      </option>
+
+                      <option value="date_latest">
+                        Booking Date: Latest
+                      </option>
+
+                      <option value="amount_highest">
+                        Amount: Highest
+                      </option>
+
+                      <option value="amount_lowest">
+                        Amount: Lowest
+                      </option>
+                    </select>
+                  </div>
+
+                </div>
+
+                <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+
+                  <p className="text-[10px] text-muted">
+                    Showing{' '}
+                    <span className="font-semibold text-ink">
+                      {filteredBookings.length}
+                    </span>{' '}
+                    of{' '}
+                    <span className="font-semibold text-ink">
+                      {bookings.length}
+                    </span>{' '}
+                    bookings
+                  </p>
+
+                  {hasFilters && (
+                    <span className="inline-flex w-fit rounded-full border border-court/20 bg-court/5 px-2.5 py-1 text-[9px] font-semibold text-court">
+                      Filters active
+                    </span>
+                  )}
+
+                </div>
+
+              </div>
+            )}
+
+          </section>
         )}
 
         {/* =================================================
-            EMPTY
+            BOOKINGS LOADING
         ================================================= */}
 
-        {!loading &&
+        {filter !==
+          'reschedule_requests' &&
+          loading && (
+            <div className="pr-card p-10 text-center">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-paper text-court">
+                <span className="animate-spin">
+                  ↻
+                </span>
+              </div>
+
+              <p className="text-sm font-medium text-ink">
+                Loading reservations...
+              </p>
+
+              <p className="mt-1 text-xs text-muted">
+                Please wait while we fetch the latest bookings.
+              </p>
+            </div>
+          )}
+
+        {/* =================================================
+            EMPTY BOOKINGS
+        ================================================= */}
+
+        {filter !==
+          'reschedule_requests' &&
+          !loading &&
           filteredBookings.length ===
             0 && (
             <div className="rounded-2xl border border-dashed border-line bg-surface p-10 text-center">
@@ -1912,7 +2545,9 @@ export default function Reservations() {
             BOOKINGS
         ================================================= */}
 
-        {!loading &&
+        {filter !==
+          'reschedule_requests' &&
+          !loading &&
           filteredBookings.length >
             0 && (
             <div className="space-y-4">
@@ -1948,9 +2583,7 @@ export default function Reservations() {
                       }
                     >
 
-                      {/* =================================
-                          TOP
-                      ================================= */}
+                      {/* TOP */}
 
                       <div className="border-b border-line px-4 py-4 sm:px-5">
 
@@ -2010,13 +2643,9 @@ export default function Reservations() {
 
                       </div>
 
-                      {/* =================================
-                          DETAILS
-                      ================================= */}
+                      {/* DETAILS */}
 
                       <div className="grid gap-4 px-4 py-5 sm:px-5 md:grid-cols-2 xl:grid-cols-4">
-
-                        {/* CUSTOMER */}
 
                         <div className="min-w-0">
 
@@ -2052,8 +2681,6 @@ export default function Reservations() {
 
                         </div>
 
-                        {/* COURT */}
-
                         <div className="min-w-0">
 
                           <div className="mb-2 flex items-center gap-2">
@@ -2074,8 +2701,6 @@ export default function Reservations() {
                           </div>
 
                         </div>
-
-                        {/* DATE / TIME */}
 
                         <div className="min-w-0">
 
@@ -2109,8 +2734,6 @@ export default function Reservations() {
 
                         </div>
 
-                        {/* PAYMENT */}
-
                         <div className="min-w-0">
 
                           <div className="mb-2 flex items-center gap-2">
@@ -2143,13 +2766,9 @@ export default function Reservations() {
 
                       </div>
 
-                      {/* =================================
-                          ACTIONS
-                      ================================= */}
+                      {/* ACTIONS */}
 
                       <div className="flex flex-col gap-2 border-t border-line bg-paper/60 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
-
-                        {/* VIEW PROOF */}
 
                         {paymentProof && (
                           <button
@@ -2168,8 +2787,6 @@ export default function Reservations() {
                             View Payment Proof
                           </button>
                         )}
-
-                        {/* VERIFY / REJECT */}
 
                         {booking.status ===
                           'confirmed' &&
@@ -2214,8 +2831,6 @@ export default function Reservations() {
                             </>
                           )}
 
-                        {/* RESCHEDULE */}
-
                         {booking.status ===
                           'confirmed' &&
                           booking.payment_status ===
@@ -2237,8 +2852,6 @@ export default function Reservations() {
                             </button>
                           )}
 
-                        {/* CANCEL */}
-
                         {booking.status ===
                           'confirmed' && (
                           <button
@@ -2256,32 +2869,20 @@ export default function Reservations() {
                           </button>
                         )}
 
-                        {/* CANCELLED */}
-
                         {booking.status ===
                           'cancelled' && (
                           <span className="flex items-center gap-2 text-xs text-muted">
-
                             <span className="h-1.5 w-1.5 rounded-full bg-muted" />
-
-                            This booking has been
-                            cancelled.
-
+                            This booking has been cancelled.
                           </span>
                         )}
-
-                        {/* RESCHEDULED INFO */}
 
                         {isBookingRescheduled(
                           booking
                         ) && (
                           <span className="flex items-center gap-2 text-xs text-court">
-
                             <span className="h-1.5 w-1.5 rounded-full bg-court" />
-
-                            This booking has been
-                            rescheduled.
-
+                            This booking has been rescheduled.
                           </span>
                         )}
 
@@ -2295,11 +2896,11 @@ export default function Reservations() {
             </div>
           )}
 
-        {/* =================================================
-            FOOTER NOTE
-        ================================================= */}
+        {/* FOOTER */}
 
-        {!loading &&
+        {filter !==
+          'reschedule_requests' &&
+          !loading &&
           filteredBookings.length >
             0 && (
             <footer className="py-6 text-center">
@@ -2327,14 +2928,12 @@ export default function Reservations() {
             setSelectedImage(null)
           }
         >
-
           <div
             className="relative max-h-[90vh] max-w-4xl"
             onClick={(event) =>
               event.stopPropagation()
             }
           >
-
             <button
               type="button"
               onClick={() =>
@@ -2351,22 +2950,18 @@ export default function Reservations() {
               alt="Payment proof"
               className="max-h-[85vh] max-w-full rounded-2xl border border-line object-contain shadow-2xl"
             />
-
           </div>
-
         </div>
       )}
 
       {/* ===================================================
-          ACTION CONFIRMATION MODAL
+          PAYMENT / BOOKING ACTION MODAL
       =================================================== */}
 
       {actionTarget && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
 
           <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
-
-            {/* MODAL HEADER */}
 
             <div className="border-b border-line px-5 py-5 sm:px-6">
 
@@ -2406,8 +3001,6 @@ export default function Reservations() {
               </div>
 
             </div>
-
-            {/* BOOKING SUMMARY */}
 
             <div className="px-5 py-5 sm:px-6">
 
@@ -2487,8 +3080,6 @@ export default function Reservations() {
 
             </div>
 
-            {/* MODAL ACTIONS */}
-
             <div className="flex flex-col-reverse gap-2 border-t border-line bg-paper/50 p-4 sm:flex-row sm:justify-end">
 
               <button
@@ -2529,7 +3120,235 @@ export default function Reservations() {
       )}
 
       {/* ===================================================
-          RESCHEDULE MODAL
+          CUSTOMER RESCHEDULE APPROVAL MODAL
+      =================================================== */}
+
+      {selectedRescheduleRequest &&
+        rescheduleRequestAction && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
+
+              <div className="border-b border-line px-5 py-5 sm:px-6">
+
+                <div className="flex items-start gap-3">
+
+                  <div
+                    className={
+                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm ' +
+                      (
+                        rescheduleRequestAction ===
+                        'approve'
+                          ? 'border border-court/20 bg-court/10 text-court'
+                          : 'border border-red-400/20 bg-red-400/10 text-red-400'
+                      )
+                    }
+                  >
+                    {rescheduleRequestAction ===
+                    'approve'
+                      ? '✓'
+                      : '!'}
+                  </div>
+
+                  <div>
+
+                    <h2 className="font-display text-lg font-bold text-ink">
+                      {rescheduleRequestAction ===
+                      'approve'
+                        ? 'Approve Reschedule?'
+                        : 'Reject Reschedule?'}
+                    </h2>
+
+                    <p className="mt-1 text-xs leading-5 text-muted">
+                      Booking{' '}
+                      <span className="font-semibold text-ink">
+                        {
+                          selectedRescheduleRequest.booking_reference
+                        }
+                      </span>
+                    </p>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+              <div className="px-5 py-5 sm:px-6">
+
+                <div className="rounded-xl border border-line bg-paper p-4">
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+
+                    <div>
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+                        Current
+                      </p>
+
+                      <p className="mt-1 text-xs font-semibold text-ink">
+                        {formatDate(
+                          selectedRescheduleRequest.old_date
+                        )}
+                      </p>
+
+                      <p className="mt-1 text-xs text-muted">
+                        {getRequestCourtName(
+                          selectedRescheduleRequest.old_court_id
+                        )}
+                      </p>
+
+                      <p className="mt-1 text-xs text-blue-400">
+                        {formatTime(
+                          selectedRescheduleRequest.old_start_time
+                        )}{' '}
+                        –{' '}
+                        {formatTime(
+                          selectedRescheduleRequest.old_end_time
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-court">
+                        Requested
+                      </p>
+
+                      <p className="mt-1 text-xs font-semibold text-ink">
+                        {formatDate(
+                          selectedRescheduleRequest.new_date
+                        )}
+                      </p>
+
+                      <p className="mt-1 text-xs text-court">
+                        {getRequestCourtName(
+                          selectedRescheduleRequest.new_court_id
+                        )}
+                      </p>
+
+                      <p className="mt-1 text-xs text-blue-400">
+                        {formatTime(
+                          selectedRescheduleRequest.new_start_time
+                        )}{' '}
+                        –{' '}
+                        {formatTime(
+                          selectedRescheduleRequest.new_end_time
+                        )}
+                      </p>
+                    </div>
+
+                  </div>
+
+                </div>
+
+                {rescheduleRequestAction ===
+                  'reject' && (
+                  <div className="mt-4">
+
+                    <label
+                      htmlFor="rejection-reason"
+                      className="mb-2 block text-xs font-semibold text-ink"
+                    >
+                      Rejection Reason
+                      <span className="ml-1 text-muted">
+                        (optional)
+                      </span>
+                    </label>
+
+                    <textarea
+                      id="rejection-reason"
+                      value={rejectionReason}
+                      onChange={(event) =>
+                        setRejectionReason(
+                          event.target.value
+                        )
+                      }
+                      rows={4}
+                      placeholder="Reason for rejecting this reschedule request..."
+                      className="w-full resize-none rounded-xl border border-line bg-paper px-3 py-3 text-sm text-ink outline-none placeholder:text-muted focus:border-red-400/40"
+                    />
+
+                  </div>
+                )}
+
+                {rescheduleRequestAction ===
+                  'approve' && (
+                  <div className="mt-4 rounded-xl border border-court/20 bg-court/5 px-4 py-3">
+
+                    <div className="flex items-start gap-2">
+
+                      <span className="mt-0.5 text-court">
+                        ✓
+                      </span>
+
+                      <p className="text-[10px] leading-5 text-muted">
+                        Approving this request will move the booking to the requested schedule after the database performs its final conflict check.
+                      </p>
+
+                    </div>
+
+                  </div>
+                )}
+
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 border-t border-line bg-paper/50 p-4 sm:flex-row sm:justify-end">
+
+                <button
+                  type="button"
+                  disabled={
+                    rescheduleRequestActionLoading
+                  }
+                  onClick={() => {
+                    setSelectedRescheduleRequest(
+                      null
+                    )
+
+                    setRescheduleRequestAction(
+                      null
+                    )
+
+                    setRejectionReason('')
+                  }}
+                  className="w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-xs font-semibold text-muted transition hover:border-court/20 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={
+                    rescheduleRequestActionLoading
+                  }
+                  onClick={
+                    handleRescheduleRequestAction
+                  }
+                  className={
+                    'w-full rounded-xl px-4 py-2.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto ' +
+                    (
+                      rescheduleRequestAction ===
+                      'approve'
+                        ? 'bg-court text-paper hover:bg-court-dark'
+                        : 'bg-red-500 text-white hover:bg-red-600'
+                    )
+                  }
+                >
+                  {rescheduleRequestActionLoading
+                    ? 'Processing...'
+                    : rescheduleRequestAction ===
+                      'approve'
+                    ? 'Approve Reschedule'
+                    : 'Reject Request'}
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+      {/* ===================================================
+          ADMIN DIRECT RESCHEDULE MODAL
       =================================================== */}
 
       {rescheduleBooking && (
@@ -2537,9 +3356,7 @@ export default function Reservations() {
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
           onClick={() => {
             if (!rescheduleSaving) {
-              setRescheduleBooking(
-                null
-              )
+              setRescheduleBooking(null)
             }
           }}
         >
@@ -2550,8 +3367,6 @@ export default function Reservations() {
               event.stopPropagation()
             }
           >
-
-            {/* HEADER */}
 
             <div className="border-b border-line px-5 py-5 sm:px-6">
 
@@ -2587,8 +3402,6 @@ export default function Reservations() {
               </div>
 
             </div>
-
-            {/* CURRENT BOOKING */}
 
             <div className="border-b border-line bg-paper/50 px-5 py-4 sm:px-6">
 
@@ -2661,13 +3474,9 @@ export default function Reservations() {
 
             </div>
 
-            {/* BODY */}
-
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
 
               <div className="space-y-5">
-
-                {/* DATE */}
 
                 <div>
                   <label
@@ -2687,8 +3496,7 @@ export default function Reservations() {
                       event
                     ) => {
                       const value =
-                        event.target
-                          .value
+                        event.target.value
 
                       setRescheduleDate(
                         value
@@ -2708,8 +3516,6 @@ export default function Reservations() {
                   />
                 </div>
 
-                {/* COURT */}
-
                 <div>
                   <label
                     htmlFor="reschedule-court"
@@ -2727,8 +3533,7 @@ export default function Reservations() {
                       event
                     ) => {
                       const value =
-                        event.target
-                          .value
+                        event.target.value
 
                       setRescheduleCourtId(
                         value
@@ -2767,8 +3572,6 @@ export default function Reservations() {
                   </select>
                 </div>
 
-                {/* SLOT INFO */}
-
                 <div className="rounded-xl border border-court/20 bg-court/5 px-4 py-3">
 
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -2803,8 +3606,6 @@ export default function Reservations() {
                   </p>
 
                 </div>
-
-                {/* SLOTS */}
 
                 <div>
 
@@ -2949,8 +3750,6 @@ export default function Reservations() {
 
                 </div>
 
-                {/* WARNING */}
-
                 <div className="rounded-xl border border-yellow-400/20 bg-yellow-400/5 px-4 py-3">
 
                   <div className="flex items-start gap-2">
@@ -2978,8 +3777,6 @@ export default function Reservations() {
               </div>
 
             </div>
-
-            {/* FOOTER */}
 
             <div className="flex flex-col-reverse gap-2 border-t border-line bg-paper/50 p-4 sm:flex-row sm:justify-end sm:px-6">
 
@@ -3024,14 +3821,4 @@ export default function Reservations() {
 
     </main>
   )
-}
-
-/* =========================================================
-   HELPER FOR EFFECT DEPENDENCY
-========================================================= */
-
-function filteredBookingsLength(
-  bookings: BookingGroup[]
-) {
-  return bookings.length
 }
