@@ -16,7 +16,7 @@ import { useAuth } from '../context/AuthContext'
 const BOOKING_RULES = [
   'Payment is required to confirm your booking.',
   'Bookings are non-refundable. If the court is unplayable due to weather or maintenance, contact us to reschedule.',
-  'Rescheduling is allowed only when at least 24 hours advance notice is given.',
+  'Customers may reschedule a booking only once. Reschedule requests must be submitted at least 24 hours before the original scheduled time and are subject to admin approval.',
   'Please arrive on time. Bookings may be released without refund if more than 30 minutes late.',
   'Play only during your reserved time and vacate the court promptly after your session.',
 ]
