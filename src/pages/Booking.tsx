@@ -220,7 +220,7 @@ export default function Booking() {
   'all' | 'available' | 'pending' | 'booked'
 >('all')
 
-  const [paymentType, setPaymentType] =
+  const [paymentType] =
     useState<'full' | 'deposit'>('full')
 
   const [proofFile, setProofFile] =
@@ -1861,7 +1861,7 @@ const bookedCount =
                         </div>
                       </div>
                     )}
-
+                    {/* Payment option hidden for now 
                     <div className="mt-6 border-t border-line pt-5">
                       <label className="mb-3 block text-sm font-medium text-ink">
                         Payment option
@@ -1929,6 +1929,7 @@ const bookedCount =
                         </button>
                       </div>
                     </div>
+                    */}
                   </section>
 
                   {/* MOBILE CUSTOMER SHEET */}
@@ -2093,7 +2094,7 @@ const bookedCount =
                               </div>
                             </div>
                           )}
-
+                          {/* Payment option hidden for now 
                           <div className="border-t border-line pt-5">
                             <label className="mb-3 block text-sm font-medium text-ink">
                               Payment option
@@ -2183,7 +2184,7 @@ const bookedCount =
                               </button>
                             </div>
                           </div>
-
+                                */}
                           <button
                             type="button"
                             onClick={() => {
