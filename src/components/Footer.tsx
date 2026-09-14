@@ -89,7 +89,7 @@ export default function Footer() {
   return (
     <>
       {/* FOOTER */}
-      <footer className="mt-12 w-full border-t border-line bg-surface">
+      <footer className="mt-auto w-full border-t border-line bg-surface">
         <div className="w-full px-5 py-5 sm:px-8 sm:py-6">
 
           {/* MAIN FOOTER */}

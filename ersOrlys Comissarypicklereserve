@@ -1,0 +1,791 @@
+[1mdiff --git a/src/pages/MyBookings.tsx b/src/pages/MyBookings.tsx[m
+[1mindex f4eb0d9..f18e5f1 100644[m
+[1m--- a/src/pages/MyBookings.tsx[m
+[1m+++ b/src/pages/MyBookings.tsx[m
+[36m@@ -1,38 +1,123 @@[m
+ import { useEffect, useState } from 'react'[m
+ import { useNavigate } from 'react-router-dom'[m
+[31m-import type { Reservation } from '../types/availability'[m
+[31m-import { getUserReservations, cancelReservation, canCancel } from '../services/availabilityService'[m
+[32m+[m[32mimport type { Reservation, TimeSlot } from '../types/availability'[m
+[32m+[m[32mimport type { Court } from '../types/court'[m
+[32m+[m
+[32m+[m[32mimport {[m
+[32m+[m[32m  getUserReservations,[m
+[32m+[m[32m  cancelReservation,[m
+[32m+[m[32m  canCancel,[m
+[32m+[m[32m  getRescheduleRequestByBooking,[m
+[32m+[m[32m  createCustomerRescheduleRequest,[m
+[32m+[m[32m  getAvailableSlots,[m
+[32m+[m[32m} from '../services/availabilityService'[m
+[32m+[m
+[32m+[m[32mimport type { RescheduleRequest } from '../services/availabilityService'[m
+[32m+[m[32mimport { getCourts } from '../services/courtService'[m
+ import { useAuth } from '../context/AuthContext'[m
+ [m
+ interface BookingWithCourt extends Reservation {[m
+   courts: { name: string } | null[m
+ }[m
+ [m
+[32m+[m[32minterface BookingRescheduleState {[m
+[32m+[m[32m  request: RescheduleRequest | null[m
+[32m+[m[32m  loading: boolean[m
+[32m+[m[32m}[m
+[32m+[m
+ export default function MyBookings() {[m
+   const { user, loading: authLoading } = useAuth()[m
+   const navigate = useNavigate()[m
+[32m+[m
+   const [bookings, setBookings] = useState<BookingWithCourt[]>([])[m
+[32m+[m[32m  const [rescheduleStates, setRescheduleStates] = useState<[m
+[32m+[m[32m    Record<string, BookingRescheduleState>[m
+[32m+[m[32m  >({})[m
+[32m+[m
+[32m+[m[32m  const [courts, setCourts] = useState<Court[]>([])[m
+[32m+[m[32m  const [rescheduleSlots, setRescheduleSlots] = useState<TimeSlot[]>([])[m
+[32m+[m
+   const [loading, setLoading] = useState(true)[m
+[32m+[m[32m  const [loadingRescheduleSlots, setLoadingRescheduleSlots] = useState(false)[m
+[32m+[m
+   const [error, setError] = useState('')[m
+[32m+[m[32m  const [rescheduleError, setRescheduleError] = useState('')[m
+[32m+[m
+   const [cancellingId, setCancellingId] = useState<string | null>(null)[m
+[32m+[m[32m  const [rescheduleId, setRescheduleId] = useState<string | null>(null)[m
+[32m+[m[32m  const [submittingReschedule, setSubmittingReschedule] = useState(false)[m
+[32m+[m
+[32m+[m[32m  const [newDate, setNewDate] = useState('')[m
+[32m+[m[32m  const [newCourtId, setNewCourtId] = useState('')[m
+[32m+[m[32m  const [newTime, setNewTime] = useState<TimeSlot | null>(null)[m
+ [m
+   useEffect(() => {[m
+     if (authLoading) return[m
+[32m+[m
+     if (!user) {[m
+       navigate('/login')[m
+       return[m
+     }[m
+[32m+[m
+     loadBookings()[m
+   }, [user, authLoading])[m
+ [m
+   async function loadBookings() {[m
+     if (!user) return[m
+[32m+[m
+     try {[m
+       setLoading(true)[m
+[31m-      const data = await getUserReservations(user.id)[m
+[31m-      setBookings(data as BookingWithCourt[])[m
+[32m+[m[32m      setError('')[m
+[32m+[m
+[32m+[m[32m      const [bookingData, courtData] = await Promise.all([[m
+[32m+[m[32m        getUserReservations(user.id),[m
+[32m+[m[32m        getCourts(),[m
+[32m+[m[32m      ])[m
+[32m+[m
+[32m+[m[32m      const userBookings = bookingData as BookingWithCourt[][m
+[32m+[m
+[32m+[m[32m      setBookings(userBookings)[m
+[32m+[m[32m      setCourts(courtData)[m
+[32m+[m
+[32m+[m[32m      const rescheduleResults: Record<[m
+[32m+[m[32m        string,[m
+[32m+[m[32m        BookingRescheduleState[m
+[32m+[m[32m      > = {}[m
+[32m+[m
+[32m+[m[32m      await Promise.all([m
+[32m+[m[32m        userBookings[m
+[32m+[m[32m          .filter([m
+[32m+[m[32m            (booking) =>[m
+[32m+[m[32m              booking.status === 'confirmed' &&[m
+[32m+[m[32m              booking.payment_status === 'verified' &&[m
+[32m+[m[32m              Boolean(booking.booking_reference)[m
+[32m+[m[32m          )[m
+[32m+[m[32m          .map(async (booking) => {[m
+[32m+[m[32m            try {[m
+[32m+[m[32m              const request = await getRescheduleRequestByBooking([m
+[32m+[m[32m                booking.booking_reference![m
+[32m+[m[32m              )[m
+[32m+[m
+[32m+[m[32m              rescheduleResults[booking.id] = {[m
+[32m+[m[32m                request,[m
+[32m+[m[32m                loading: false,[m
+[32m+[m[32m              }[m
+[32m+[m[32m            } catch {[m
+[32m+[m[32m              rescheduleResults[booking.id] = {[m
+[32m+[m[32m                request: null,[m
+[32m+[m[32m                loading: false,[m
+[32m+[m[32m              }[m
+[32m+[m[32m            }[m
+[32m+[m[32m          })[m
+[32m+[m[32m      )[m
+[32m+[m
+[32m+[m[32m      setRescheduleStates(rescheduleResults)[m
+     } catch (err) {[m
+[31m-      setError(err instanceof Error ? err.message : 'Failed to load bookings')[m
+[32m+[m[32m      setError([m
+[32m+[m[32m        err instanceof Error[m
+[32m+[m[32m          ? err.message[m
+[32m+[m[32m          : 'Failed to load bookings'[m
+[32m+[m[32m      )[m
+     } finally {[m
+       setLoading(false)[m
+     }[m
+[36m@@ -40,38 +125,297 @@[m [mexport default function MyBookings() {[m
+ [m
+   async function handleCancel(id: string) {[m
+     if (!confirm('Cancel this booking?')) return[m
+[32m+[m
+     setCancellingId(id)[m
+     setError('')[m
+[32m+[m
+     try {[m
+       await cancelReservation(id)[m
+       await loadBookings()[m
+     } catch (err) {[m
+[31m-      setError(err instanceof Error ? err.message : 'Failed to cancel')[m
+[32m+[m[32m      setError([m
+[32m+[m[32m        err instanceof Error[m
+[32m+[m[32m          ? err.message[m
+[32m+[m[32m          : 'Failed to cancel'[m
+[32m+[m[32m      )[m
+     } finally {[m
+       setCancellingId(null)[m
+     }[m
+   }[m
+ [m
+[31m-  function statusBadge(b: BookingWithCourt) {[m
+[31m-    if (b.status === 'cancelled') {[m
+[31m-      return <span className="text-xs px-2 py-1 rounded-full bg-line text-muted shrink-0">Cancelled</span>[m
+[32m+[m[32m  function getOriginalStart(booking: BookingWithCourt) {[m
+[32m+[m[32m    return new Date([m
+[32m+[m[32m      `${booking.date}T${booking.start_time.slice(0, 5)}:00`[m
+[32m+[m[32m    )[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function has24HourNotice(booking: BookingWithCourt) {[m
+[32m+[m[32m    const originalStart = getOriginalStart(booking)[m
+[32m+[m[32m    const now = new Date()[m
+[32m+[m
+[32m+[m[32m    const differenceInHours =[m
+[32m+[m[32m      (originalStart.getTime() - now.getTime()) /[m
+[32m+[m[32m      (1000 * 60 * 60)[m
+[32m+[m
+[32m+[m[32m    return differenceInHours >= 24[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function getRescheduleState([m
+[32m+[m[32m    booking: BookingWithCourt[m
+[32m+[m[32m  ): BookingRescheduleState {[m
+[32m+[m[32m    return ([m
+[32m+[m[32m      rescheduleStates[booking.id] ?? {[m
+[32m+[m[32m        request: null,[m
+[32m+[m[32m        loading: false,[m
+[32m+[m[32m      }[m
+[32m+[m[32m    )[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function canReschedule(booking: BookingWithCourt) {[m
+[32m+[m[32m    if (booking.status !== 'confirmed') return false[m
+[32m+[m[32m    if (booking.payment_status !== 'verified') return false[m
+[32m+[m[32m    if (!booking.booking_reference) return false[m
+[32m+[m
+[32m+[m[32m    const state = getRescheduleState(booking)[m
+[32m+[m
+[32m+[m[32m    if (state.loading) return false[m
+[32m+[m[32m    if (state.request?.status === 'approved') return false[m
+[32m+[m[32m    if (state.request?.status === 'pending') return false[m
+[32m+[m
+[32m+[m[32m    return has24HourNotice(booking)[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function getRescheduleMessage([m
+[32m+[m[32m    booking: BookingWithCourt[m
+[32m+[m[32m  ): string | null {[m
+[32m+[m[32m    if (booking.status !== 'confirmed') return null[m
+[32m+[m[32m    if (booking.payment_status !== 'verified') return null[m
+[32m+[m
+[32m+[m[32m    const state = getRescheduleState(booking)[m
+[32m+[m
+[32m+[m[32m    if (state.request?.status === 'approved') {[m
+[32m+[m[32m      return 'This booking has already used its one reschedule.'[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    if (state.request?.status === 'pending') {[m
+[32m+[m[32m      return 'Your reschedule request is pending admin approval.'[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    if (!has24HourNotice(booking)) {[m
+[32m+[m[32m      return 'Reschedule is only available at least 24 hours before your scheduled booking.'[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    return null[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function closeReschedule() {[m
+[32m+[m[32m    setRescheduleId(null)[m
+[32m+[m[32m    setNewDate('')[m
+[32m+[m[32m    setNewCourtId('')[m
+[32m+[m[32m    setNewTime(null)[m
+[32m+[m[32m    setRescheduleSlots([])[m
+[32m+[m[32m    setRescheduleError('')[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async function openReschedule(booking: BookingWithCourt) {[m
+[32m+[m[32m    if (!canReschedule(booking)) return[m
+[32m+[m
+[32m+[m[32m    setRescheduleId(booking.id)[m
+[32m+[m[32m    setRescheduleError('')[m
+[32m+[m[32m    setNewTime(null)[m
+[32m+[m[32m    setRescheduleSlots([])[m
+[32m+[m
+[32m+[m[32m    const today = new Date()[m
+[32m+[m[32m    today.setDate(today.getDate() + 1)[m
+[32m+[m
+[32m+[m[32m    const isoToday = today.toISOString().slice(0, 10)[m
+[32m+[m
+[32m+[m[32m    setNewDate(isoToday)[m
+[32m+[m
+[32m+[m[32m    const availableCourts = courts.filter([m
+[32m+[m[32m      (court) => court.status === 'available'[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m    if (availableCourts.length > 0) {[m
+[32m+[m[32m      const firstCourt = availableCourts[0][m
+[32m+[m
+[32m+[m[32m      setNewCourtId(firstCourt.id)[m
+[32m+[m
+[32m+[m[32m      await loadRescheduleSlots([m
+[32m+[m[32m        firstCourt.id,[m
+[32m+[m[32m        isoToday[m
+[32m+[m[32m      )[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async function loadRescheduleSlots([m
+[32m+[m[32m    courtId: string,[m
+[32m+[m[32m    date: string[m
+[32m+[m[32m  ) {[m
+[32m+[m[32m    if (!courtId || !date) return[m
+[32m+[m
+[32m+[m[32m    setLoadingRescheduleSlots(true)[m
+[32m+[m[32m    setRescheduleError('')[m
+[32m+[m[32m    setNewTime(null)[m
+[32m+[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      const data = await getAvailableSlots([m
+[32m+[m[32m        courtId,[m
+[32m+[m[32m        date[m
+[32m+[m[32m      )[m
+[32m+[m
+[32m+[m[32m      setRescheduleSlots(data)[m
+[32m+[m[32m    } catch (err) {[m
+[32m+[m[32m      setRescheduleSlots([])[m
+[32m+[m
+[32m+[m[32m      setRescheduleError([m
+[32m+[m[32m        err instanceof Error[m
+[32m+[m[32m          ? err.message[m
+[32m+[m[32m          : 'Failed to load available times'[m
+[32m+[m[32m      )[m
+[32m+[m[32m    } finally {[m
+[32m+[m[32m      setLoadingRescheduleSlots(false)[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async function handleNewDateChange([m
+[32m+[m[32m    value: string[m
+[32m+[m[32m  ) {[m
+[32m+[m[32m    setNewDate(value)[m
+[32m+[m[32m    setNewTime(null)[m
+[32m+[m
+[32m+[m[32m    if (newCourtId) {[m
+[32m+[m[32m      await loadRescheduleSlots([m
+[32m+[m[32m        newCourtId,[m
+[32m+[m[32m        value[m
+[32m+[m[32m      )[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async function handleNewCourtChange([m
+[32m+[m[32m    value: string[m
+[32m+[m[32m  ) {[m
+[32m+[m[32m    setNewCourtId(value)[m
+[32m+[m[32m    setNewTime(null)[m
+[32m+[m
+[32m+[m[32m    if (newDate) {[m
+[32m+[m[32m      await loadRescheduleSlots([m
+[32m+[m[32m        value,[m
+[32m+[m[32m        newDate[m
+[32m+[m[32m      )[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async function submitReschedule([m
+[32m+[m[32m    booking: BookingWithCourt[m
+[32m+[m[32m  ) {[m
+[32m+[m[32m    if (!booking.booking_reference) {[m
+[32m+[m[32m      setRescheduleError([m
+[32m+[m[32m        'Booking reference is missing.'[m
+[32m+[m[32m      )[m
+[32m+[m[32m      return[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    if (!newDate) {[m
+[32m+[m[32m      setRescheduleError([m
+[32m+[m[32m        'Please select a new date.'[m
+[32m+[m[32m      )[m
+[32m+[m[32m      return[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    if (!newCourtId) {[m
+[32m+[m[32m      setRescheduleError([m
+[32m+[m[32m        'Please select a court.'[m
+[32m+[m[32m      )[m
+[32m+[m[32m      return[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    if (!newTime) {[m
+[32m+[m[32m      setRescheduleError([m
+[32m+[m[32m        'Please select an available time.'[m
+[32m+[m[32m      )[m
+[32m+[m[32m      return[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    setSubmittingReschedule(true)[m
+[32m+[m[32m    setRescheduleError('')[m
+[32m+[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      await createCustomerRescheduleRequest([m
+[32m+[m[32m        booking.booking_reference,[m
+[32m+[m[32m        newDate,[m
+[32m+[m[32m        newCourtId,[m
+[32m+[m[32m        newTime.start_time,[m
+[32m+[m[32m        newTime.end_time[m
+[32m+[m[32m      )[m
+[32m+[m
+[32m+[m[32m      await loadBookings()[m
+[32m+[m
+[32m+[m[32m      closeReschedule()[m
+[32m+[m[32m    } catch (err) {[m
+[32m+[m[32m      setRescheduleError([m
+[32m+[m[32m        err instanceof Error[m
+[32m+[m[32m          ? err.message[m
+[32m+[m[32m          : 'Failed to submit reschedule request'[m
+[32m+[m[32m      )[m
+[32m+[m[32m    } finally {[m
+[32m+[m[32m      setSubmittingReschedule(false)[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function statusBadge([m
+[32m+[m[32m    booking: BookingWithCourt[m
+[32m+[m[32m  ) {[m
+[32m+[m[32m    if (booking.status === 'cancelled') {[m
+[32m+[m[32m      return ([m
+[32m+[m[32m        <span className="text-xs px-2 py-1 rounded-full bg-line text-muted shrink-0">[m
+[32m+[m[32m          Cancelled[m
+[32m+[m[32m        </span>[m
+[32m+[m[32m      )[m
+     }[m
+[31m-    if (b.payment_status === 'verified') {[m
+[31m-      return <span className="text-xs px-2 py-1 rounded-full bg-court/15 text-court shrink-0">Verified</span>[m
+[32m+[m
+[32m+[m[32m    if (booking.payment_status === 'verified') {[m
+[32m+[m[32m      return ([m
+[32m+[m[32m        <span className="text-xs px-2 py-1 rounded-full bg-court/15 text-court shrink-0">[m
+[32m+[m[32m          Verified[m
+[32m+[m[32m        </span>[m
+[32m+[m[32m      )[m
+     }[m
+[31m-    if (b.payment_status === 'rejected') {[m
+[31m-      return <span className="text-xs px-2 py-1 rounded-full bg-red-950/40 text-red-400 shrink-0">Rejected</span>[m
+[32m+[m
+[32m+[m[32m    if (booking.payment_status === 'rejected') {[m
+[32m+[m[32m      return ([m
+[32m+[m[32m        <span className="text-xs px-2 py-1 rounded-full bg-red-950/40 text-red-400 shrink-0">[m
+[32m+[m[32m          Rejected[m
+[32m+[m[32m        </span>[m
+[32m+[m[32m      )[m
+     }[m
+[31m-    return <span className="text-xs px-2 py-1 rounded-full bg-line text-muted shrink-0">Pending</span>[m
+[32m+[m
+[32m+[m[32m    return ([m
+[32m+[m[32m      <span className="text-xs px-2 py-1 rounded-full bg-line text-muted shrink-0">[m
+[32m+[m[32m        Pending[m
+[32m+[m[32m      </span>[m
+[32m+[m[32m    )[m
+   }[m
+ [m
+[31m-  if (authLoading || loading) return <div className="p-8 max-w-2xl mx-auto text-muted">Loading...</div>[m
+[32m+[m[32m  if (authLoading || loading) {[m
+[32m+[m[32m    return ([m
+[32m+[m[32m      <div className="p-8 max-w-2xl mx-auto text-muted">[m
+[32m+[m[32m        Loading...[m
+[32m+[m[32m      </div>[m
+[32m+[m[32m    )[m
+[32m+[m[32m  }[m
+ [m
+   return ([m
+     <div className="p-6 sm:p-8 max-w-2xl mx-auto">[m
+[31m-      <h1 className="font-display text-2xl font-semibold text-ink mb-6">My bookings</h1>[m
+[32m+[m[32m      <h1 className="font-display text-2xl font-semibold text-ink mb-6">[m
+[32m+[m[32m        My bookings[m
+[32m+[m[32m      </h1>[m
+ [m
+[31m-      {error && <p className="text-red-400 mb-4">{error}</p>}[m
+[32m+[m[32m      {error && ([m
+[32m+[m[32m        <p className="text-red-400 mb-4">[m
+[32m+[m[32m          {error}[m
+[32m+[m[32m        </p>[m
+[32m+[m[32m      )}[m
+ [m
+       {bookings.length === 0 && ([m
+         <div className="border border-line rounded-lg p-8 text-center text-muted">[m
+[36m@@ -80,39 +424,325 @@[m [mexport default function MyBookings() {[m
+       )}[m
+ [m
+       <div className="space-y-3">[m
+[31m-        {bookings.map((b) => {[m
+[31m-          const canBeCancelled = canCancel(b)[m
+[32m+[m[32m        {bookings.map((booking) => {[m
+[32m+[m[32m          const canBeCancelled =[m
+[32m+[m[32m            canCancel(booking)[m
+[32m+[m
+[32m+[m[32m          const canBeRescheduled =[m
+[32m+[m[32m            canReschedule(booking)[m
+[32m+[m
+[32m+[m[32m          const rescheduleMessage =[m
+[32m+[m[32m            getRescheduleMessage(booking)[m
+[32m+[m
+[32m+[m[32m          const isRescheduling =[m
+[32m+[m[32m            rescheduleId === booking.id[m
+[32m+[m
+           return ([m
+[31m-            <div key={b.id} className="border border-line rounded-lg p-4 bg-surface">[m
+[32m+[m[32m            <div[m
+[32m+[m[32m              key={booking.id}[m
+[32m+[m[32m              className="border border-line rounded-lg p-4 bg-surface"[m
+[32m+[m[32m            >[m
+               <div className="flex items-start justify-between gap-3">[m
+                 <div>[m
+[31m-                  <p className="font-medium text-ink">{b.courts?.name ?? 'Court'}</p>[m
+[32m+[m[32m                  <p className="font-medium text-ink">[m
+[32m+[m[32m                    {booking.courts?.name ?? 'Court'}[m
+[32m+[m[32m                  </p>[m
+[32m+[m
+                   <p className="text-sm text-muted">[m
+[31m-                    {b.date} · {b.start_time.slice(0, 5)}–{b.end_time.slice(0, 5)}[m
+[32m+[m[32m                    {booking.date} ·{' '}[m
+[32m+[m[32m                    {booking.start_time.slice(0, 5)}[m
+[32m+[m[32m                    –[m
+[32m+[m[32m                    {booking.end_time.slice(0, 5)}[m
+                   </p>[m
+[32m+[m
+                   <p className="text-sm text-muted mt-1">[m
+[31m-                    {b.payment_type === 'deposit' ? 'Deposit' : 'Full payment'}:{' '}[m
+[31m-                    <span className="font-medium text-ink">₱{b.amount_due ?? '—'}</span>[m
+[32m+[m[32m                    {booking.payment_type === 'deposit'[m
+[32m+[m[32m                      ? 'Deposit'[m
+[32m+[m[32m                      : 'Full payment'}[m
+[32m+[m[32m                    :{' '}[m
+[32m+[m[32m                    <span className="font-medium text-ink">[m
+[32m+[m[32m                      ₱{booking.amount_due ?? '—'}[m
+[32m+[m[32m                    </span>[m
+                   </p>[m
+                 </div>[m
+[31m-                {statusBadge(b)}[m
+[32m+[m
+[32m+[m[32m                {statusBadge(booking)}[m
+               </div>[m
+ [m
+[31m-              {b.status === 'confirmed' && ([m
+[31m-                <div className="mt-3">[m
+[31m-                  {canBeCancelled ? ([m
+[31m-                    <button[m
+[31m-                      onClick={() => handleCancel(b.id)}[m
+[31m-                      disabled={cancellingId === b.id}[m
+[31m-                      className="text-sm text-red-400 hover:underline disabled:opacity-50"[m
+[31m-                    >[m
+[31m-                      {cancellingId === b.id ? 'Cancelling...' : 'Cancel booking'}[m
+[31m-                    </button>[m
+[31m-                  ) : ([m
+[31m-                    <p className="text-xs text-muted/70">[m
+[31m-                      Cancellation window has passed (24hrs). Contact admin for changes.[m
+[31m-                    </p>[m
+[32m+[m[32m              {booking.status === 'confirmed' && ([m
+[32m+[m[32m                <div className="mt-4 space-y-3">[m
+[32m+[m[32m                  {booking.payment_status === 'verified' && ([m
+[32m+[m[32m                    <div className="border border-line rounded-lg p-3 bg-paper">[m
+[32m+[m[32m                      <div className="flex items-center justify-between gap-3">[m
+[32m+[m[32m                        <div>[m
+[32m+[m[32m                          <p className="text-sm font-medium text-ink">[m
+[32m+[m[32m                            Reschedule[m
+[32m+[m[32m                          </p>[m
+[32m+[m
+[32m+[m[32m                          <p className="text-xs text-muted mt-1">[m
+[32m+[m[32m                            1 reschedule per booking[m
+[32m+[m[32m                          </p>[m
+[32m+[m[32m                        </div>[m
+[32m+[m
+[32m+[m[32m                        <button[m
+[32m+[m[32m                          type="button"[m
+[32m+[m[32m                          onClick={() =>[m
+[32m+[m[32m                            openReschedule(booking)[m
+[32m+[m[32m                          }[m
+[32m+[m[32m                          disabled={[m
+[32m+[m[32m                            !canBeRescheduled ||[m
+[32m+[m[32m                            isRescheduling[m
+[32m+[m[32m                          }[m
+[32m+[m[32m                          className="text-sm px-3 py-2 rounded-md border border-court/40 text-court hover:bg-court/10 disabled:opacity-50 disabled:cursor-not-allowed"[m
+[32m+[m[32m                        >[m
+[32m+[m[32m                          {getRescheduleState(booking).request[m
+[32m+[m[32m                            ?.status === 'pending'[m
+[32m+[m[32m                            ? 'Reschedule requested'[m
+[32m+[m[32m                            : getRescheduleState(booking).request[m
+[32m+[m[32m                                ?.status === 'approved'[m
+[32m+[m[32m                            ? 'Rescheduled'[m
+[32m+[m[32m                            : 'Reschedule booking'}[m
+[32m+[m[32m                        </button>[m
+[32m+[m[32m                      </div>[m
+[32m+[m
+[32m+[m[32m                      {rescheduleMessage && ([m
+[32m+[m[32m                        <p className="text-xs text-muted mt-2">[m
+[32m+[m[32m                          {rescheduleMessage}[m
+[32m+[m[32m                        </p>[m
+[32m+[m[32m                      )}[m
+[32m+[m
+[32m+[m[32m                      {isRescheduling && ([m
+[32m+[m[32m                        <div className="mt-4 border-t border-line pt-4 space-y-4">[m
+[32m+[m[32m                          <div>[m
+[32m+[m[32m                            <p className="text-sm font-semibold text-ink">[m
+[32m+[m[32m                              Request reschedule[m
+[32m+[m[32m                            </p>[m
+[32m+[m
+[32m+[m[32m                            <p className="text-xs text-muted mt-1">[m
+[32m+[m[32m                              Choose a new date, court, and available time.[m
+[32m+[m[32m                              Your request will need admin approval.[m
+[32m+[m[32m                            </p>[m
+[32m+[m[32m                          </div>[m
+[32m+[m
+[32m+[m[32m                          {rescheduleError && ([m
+[32m+[m[32m                            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">[m
+[32m+[m[32m                              <p className="text-sm text-red-400">[m
+[32m+[m[32m                                {rescheduleError}[m
+[32m+[m[32m                              </p>[m
+[32m+[m[32m                            </div>[m
+[32m+[m[32m                          )}[m
+[32m+[m
+[32m+[m[32m                          <div>[m
+[32m+[m[32m                            <label className="block text-xs font-medium text-muted mb-1">[m
+[32m+[m[32m                              New date[m
+[32m+[m[32m                            </label>[m
+[32m+[m
+[32m+[m[32m                            <input[m
+[32m+[m[32m                              type="date"[m
+[32m+[m[32m                              value={newDate}[m
+[32m+[m[32m                              min={[m
+[32m+[m[32m                                new Date([m
+[32m+[m[32m                                  Date.now() +[m
+[32m+[m[32m                                    24 * 60 * 60 * 1000[m
+[32m+[m[32m                                )[m
+[32m+[m[32m                                  .toISOString()[m
+[32m+[m[32m                                  .slice(0, 10)[m
+[32m+[m[32m                              }[m
+[32m+[m[32m                              onChange={(event) =>[m
+[32m+[m[32m                                handleNewDateChange([m
+[32m+[m[32m                                  event.target.value[m
+[32m+[m[32m                                )[m
+[32m+[m[32m                              }[m
+[32m+[m[32m                              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"[m
+[32m+[m[32m                            />[m
+[32m+[m[32m                          </div>[m
+[32m+[m
+[32m+[m[32m                          <div>[m
+[32m+[m[32m                            <label className="block text-xs font-medium text-muted mb-1">[m
+[32m+[m[32m                              New court[m
+[32m+[m[32m                            </label>[m
+[32m+[m
+[32m+[m[32m                            <select[m
+[32m+[m[32m                              value={newCourtId}[m
+[32m+[m[32m                              onChange={(event) =>[m
+[32m+[m[32m                                handleNewCourtChange([m
+[32m+[m[32m                                  event.target.value[m
+[32m+[m[32m                                )[m
+[32m+[m[32m                              }[m
+[32m+[m[32m                              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"[m
+[32m+[m[32m                            >[m
+[32m+[m[32m                              <option value="">[m
+[32m+[m[32m                                Select court[m
+[32m+[m[32m                              </option>[m
+[32m+[m
+[32m+[m[32m                              {courts[m
+[32m+[m[32m                                .filter([m
+[32m+[m[32m                                  (court) =>[m
+[32m+[m[32m                                    court.status ===[m
+[32m+[m[32m                                    'available'[m
+[32m+[m[32m                                )[m
+[32m+[m[32m                                .map((court) => ([m
+[32m+[m[32m                                  <option[m
+[32m+[m[32m                                    key={court.id}[m
+[32m+[m[32m                                    value={court.id}[m
+[32m+[m[32m                                  >[m
+[32m+[m[32m                                    {court.name}[m
+[32m+[m[32m                                  </option>[m
+[32m+[m[32m                                ))}[m
+[32m+[m[32m                            </select>[m
+[32m+[m[32m                          </div>[m
+[32m+[m
+[32m+[m[32m                          <div>[m
+[32m+[m[32m                            <label className="block text-xs font-medium text-muted mb-2">[m
+[32m+[m[32m                              Available time[m
+[32m+[m[32m                            </label>[m
+[32m+[m
+[32m+[m[32m                            {loadingRescheduleSlots ? ([m
+[32m+[m[32m                              <p className="text-sm text-muted">[m
+[32m+[m[32m                                Loading available times...[m
+[32m+[m[32m                              </p>[m
+[32m+[m[32m                            ) : rescheduleSlots.filter([m
+[32m+[m[32m                                (slot) =>[m
+[32m+[m[32m                                  slot.available[m
+[32m+[m[32m                              ).length === 0 ? ([m
+[32m+[m[32m                              <div className="rounded-lg border border-line p-4 text-center">[m
+[32m+[m[32m                                <p className="text-sm text-muted">[m
+[32m+[m[32m                                  No available times for this date.[m
+[32m+[m[32m                                </p>[m
+[32m+[m[32m                              </div>[m
+[32m+[m[32m                            ) : ([m
+[32m+[m[32m                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">[m
+[32m+[m[32m                                {rescheduleSlots[m
+[32m+[m[32m                                  .filter([m
+[32m+[m[32m                                    (slot) =>[m
+[32m+[m[32m                                      slot.available[m
+[32m+[m[32m                                  )[m
+[32m+[m[32m                                  .map((slot) => {[m
+[32m+[m[32m                                    const selected =[m
+[32m+[m[32m                                      newTime?.start_time ===[m
+[32m+[m[32m                                        slot.start_time &&[m
+[32m+[m[32m                                      newTime?.end_time ===[m
+[32m+[m[32m                                        slot.end_time[m
+[32m+[m
+[32m+[m[32m                                    return ([m
+[32m+[m[32m                                      <button[m
+[32m+[m[32m                                        key={`${slot.start_time}-${slot.end_time}`}[m
+[32m+[m[32m                                        type="button"[m
+[32m+[m[32m                                        onClick={() =>[m
+[32m+[m[32m                                          setNewTime([m
+[32m+[m[32m                                            slot[m
+[32m+[m[32m                                          )[m
+[32m+[m[32m                                        }[m
+[32m+[m[32m                                        className={`rounded-lg border px-3 py-2 text-sm transition ${[m
+[32m+[m[32m                                          selected[m
+[32m+[m[32m                                            ? 'border-court bg-court/15 text-court'[m
+[32m+[m[32m                                            : 'border-line bg-surface text-ink hover:border-court/50'[m
+[32m+[m[32m                                        }`}[m
+[32m+[m[32m                                      >[m
+[32m+[m[32m                                        {slot.start_time.slice([m
+[32m+[m[32m                                          0,[m
+[32m+[m[32m                                          5[m
+[32m+[m[32m                                        )}{' '}[m
+[32m+[m[32m                                        –{' '}[m
+[32m+[m[32m                                        {slot.end_time.slice([m
+[32m+[m[32m                                          0,[m
+[32m+[m[32m                                          5[m
+[32m+[m[32m                                        )}[m
+[32m+[m[32m                                      </button>[m
+[32m+[m[32m                                    )[m
+[32m+[m[32m                                  })}[m
+[32m+[m[32m                              </div>[m
+[32m+[m[32m                            )}[m
+[32m+[m[32m                          </div>[m
+[32m+[m
+[32m+[m[32m                          {newTime && ([m
+[32m+[m[32m                            <div className="rounded-lg border border-court/30 bg-court/5 p-3">[m
+[32m+[m[32m                              <p className="text-xs text-muted">[m
+[32m+[m[32m                                New schedule[m
+[32m+[m[32m                              </p>[m
+[32m+[m
+[32m+[m[32m                              <p className="text-sm font-medium text-ink mt-1">[m
+[32m+[m[32m                                {newDate} ·{' '}[m
+[32m+[m[32m                                {[m
+[32m+[m[32m                                  courts.find([m
+[32m+[m[32m                                    (court) =>[m
+[32m+[m[32m                                      court.id ===[m
+[32m+[m[32m                                      newCourtId[m
+[32m+[m[32m                                  )?.name[m
+[32m+[m[32m                                }{' '}[m
+[32m+[m[32m                                ·{' '}[m
+[32m+[m[32m                                {newTime.start_time.slice([m
+[32m+[m[32m                                  0,[m
+[32m+[m[32m                                  5[m
+[32m+[m[32m                                )}[m
+[32m+[m[32m                                –[m
+[32m+[m[32m                                {newTime.end_time.slice([m
+[32m+[m[32m                                  0,[m
+[32m+[m[32m                                  5[m
+[32m+[m[32m                                )}[m
+[32m+[m[32m                              </p>[m
+[32m+[m[32m                            </div>[m
+[32m+[m[32m                          )}[m
+[32m+[m
+[32m+[m[32m                          <div className="flex items-center justify-end gap-2 pt-1">[m
+[32m+[m[32m                            <button[m
+[32m+[m[32m                              type="button"[m
+[32m+[m[32m                              onClick={closeReschedule}[m
+[32m+[m[32m                              disabled={[m
+[32m+[m[32m                                submittingReschedule[m
+[32m+[m[32m                              }[m
+[32m+[m[32m                              className="text-sm px-3 py-2 rounded-md text-muted hover:text-ink disabled:opacity-50"[m
+[32m+[m[32m                            >[m
+[32m+[m[32m                              Close[m
+[32m+[m[32m                            </button>[m
+[32m+[m
+[32m+[m[32m                            <button[m
+[32m+[m[32m                              type="button"[m
+[32m+[m[32m                              onClick={() =>[m
+[32m+[m[32m                                submitReschedule([m
+[32m+[m[32m                                  booking[m
+[32m+[m[32m                                )[m
+[32m+[m[32m                              }[m
+[32m+[m[32m                              disabled={[m
+[32m+[m[32m                                submittingReschedule ||[m
+[32m+[m[32m                                !newDate ||[m
+[32m+[m[32m                                !newCourtId ||[m
+[32m+[m[32m                                !newTime[m
+[32m+[m[32m                              }[m
+[32m+[m[32m                              className="text-sm px-4 py-2 rounded-md bg-court text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"[m
+[32m+[m[32m                            >[m
+[32m+[m[32m                              {submittingReschedule[m
+[32m+[m[32m                                ? 'Submitting...'[m
+[32m+[m[32m                                : 'Submit request'}[m
+[32m+[m[32m                            </button>[m
+[32m+[m[32m                          </div>[m
+[32m+[m[32m                        </div>[m
+[32m+[m[32m                      )}[m
+[32m+[m[32m                    </div>[m
+                   )}[m
+[32m+[m
+[32m+[m[32m                  <div>[m
+[32m+[m[32m                    {canBeCancelled ? ([m
+[32m+[m[32m                      <button[m
+[32m+[m[32m                        onClick={() =>[m
+[32m+[m[32m                          handleCancel(booking.id)[m
+[32m+[m[32m                        }[m
+[32m+[m[32m                        disabled={[m
+[32m+[m[32m                          cancellingId === booking.id[m
+[32m+[m[32m                        }[m
+[32m+[m[32m                        className="text-sm text-red-400 hover:underline disabled:opacity-50"[m
+[32m+[m[32m                      >[m
+[32m+[m[32m                        {cancellingId === booking.id[m
+[32m+[m[32m                          ? 'Cancelling...'[m
+[32m+[m[32m                          : 'Cancel booking'}[m
+[32m+[m[32m                      </button>[m
+[32m+[m[32m                    ) : ([m
+[32m+[m[32m                      <p className="text-xs text-muted/70">[m
+[32m+[m[32m                        Cancellation window has passed[m
+[32m+[m[32m                        (24hrs). Contact admin for changes.[m
+[32m+[m[32m                      </p>[m
+[32m+[m[32m                    )}[m
+[32m+[m[32m                  </div>[m
+                 </div>[m
+               )}[m
+             </div>[m
