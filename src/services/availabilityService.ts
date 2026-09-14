@@ -49,7 +49,6 @@ export async function updateOperatingHours(
 /**
  * Get confirmed reservations for a specific court/date.
  *
- * IMPORTANT:
  * Only confirmed reservations block the available slots.
  * Cancelled reservations are intentionally ignored.
  */
@@ -97,7 +96,6 @@ export async function createReservation(
 
 /* =========================================================
    CANCEL SINGLE RESERVATION
-   Kept for existing FindBooking compatibility.
 ========================================================= */
 
 export async function cancelReservation(
@@ -124,16 +122,6 @@ export async function cancelReservation(
    CANCEL ENTIRE BOOKING
 ========================================================= */
 
-/**
- * Cancels all reservation rows belonging to the same
- * booking reference.
- *
- * A multi-hour booking is stored as multiple reservation
- * rows, so cancelling by booking reference is important.
- *
- * If there is no booking reference, falls back to a
- * single reservation ID.
- */
 export async function cancelBooking(
   bookingReference: string | null,
   reservationId?: string
@@ -169,13 +157,6 @@ export async function cancelBooking(
    UPDATE PAYMENT STATUS FOR ENTIRE BOOKING
 ========================================================= */
 
-/**
- * Updates payment status for all rows belonging to
- * one booking.
- *
- * Used primarily for:
- *   pending → verified
- */
 export async function updateBookingPaymentStatus(
   bookingReference: string | null,
   paymentStatus: 'verified' | 'rejected',
@@ -277,12 +258,6 @@ export async function rejectBookingPayment(
    PENDING PAYMENTS
 ========================================================= */
 
-/**
- * Gets bookings that still require payment verification.
- *
- * Only confirmed reservations with pending payment
- * are returned.
- */
 export async function getPendingPaymentsAdmin(): Promise<
   Reservation[]
 > {
@@ -369,9 +344,6 @@ export async function getAllReservationsAdmin(): Promise<
   return data ?? []
 }
 
-/* =========================================================
-   GET BOOKING BY REFERENCE
-========================================================= */
 /* =========================================================
    ADMIN RESCHEDULED BOOKING REFERENCES
 ========================================================= */
@@ -472,15 +444,6 @@ function generateTimeSlots(
 
   let closeMinutes = timeToMinutes(closeTime)
 
-  /*
-    Overnight schedule example:
-
-    16:00 → 01:00
-
-    becomes:
-
-    16:00 → 25:00
-  */
   if (
     closeMinutes <= openMinutes &&
     closeMinutes !== 1440
@@ -500,9 +463,11 @@ function generateTimeSlots(
       closeMinutes
     )
 
-    const startTime = minutesToTime(current)
+    const startTime =
+      minutesToTime(current)
 
-    const endTime = minutesToTime(next)
+    const endTime =
+      minutesToTime(next)
 
     const reservation =
       existingReservations.find(
@@ -521,12 +486,8 @@ function generateTimeSlots(
       start_time: startTime,
       end_time: endTime,
 
-      // Both pending and verified bookings
-      // must block the slot.
       available: !reservation,
 
-      // Used by the UI later to distinguish
-      // pending from booked.
       status: reservation
         ? isPending
           ? 'pending'
@@ -713,9 +674,8 @@ export async function getReservationsByReference(
   return data ?? []
 }
 
-
 /* =========================================================
-   RESCHEDULE REQUEST
+   RESCHEDULE TYPES
 ========================================================= */
 
 export interface RescheduleSlot {
@@ -725,20 +685,52 @@ export interface RescheduleSlot {
   end_time: string
 }
 
+export interface RescheduleRequest {
+  id: string
+  booking_reference: string
+
+  old_date: string
+  old_court_id: string
+  old_start_time: string
+  old_end_time: string
+
+  new_date: string
+  new_court_id: string
+  new_start_time: string
+  new_end_time: string
+
+  status:
+    | 'pending'
+    | 'approved'
+    | 'rejected'
+    | 'cancelled'
+
+  requested_by: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  rejection_reason: string | null
+
+  created_at: string
+  updated_at: string
+}
+
+/* =========================================================
+   MULTI-SLOT RESCHEDULE REQUEST
+========================================================= */
+
 /**
- * Creates a multi-slot reschedule request.
+ * Existing multi-slot reschedule flow.
  *
- * The booking remains unchanged until an admin approves
- * the request.
+ * Used by the existing reschedule workflow.
  *
- * The number of requested slots must match the number
- * of reservation rows in the existing booking.
+ * The booking remains unchanged until admin approval.
  */
 export async function createRescheduleRequest(
   bookingReference: string,
   newSlots: RescheduleSlot[]
 ): Promise<string> {
-  const reference = bookingReference?.trim()
+  const reference =
+    bookingReference?.trim()
 
   if (!reference) {
     throw new Error(
@@ -752,13 +744,14 @@ export async function createRescheduleRequest(
     )
   }
 
-  const { data, error } = await supabase.rpc(
-    'create_reschedule_request_multislot',
-    {
-      p_booking_reference: reference,
-      p_new_slots: newSlots,
-    }
-  )
+  const { data, error } =
+    await supabase.rpc(
+      'create_reschedule_request_multislot',
+      {
+        p_booking_reference: reference,
+        p_new_slots: newSlots,
+      }
+    )
 
   if (error) {
     console.error(
@@ -778,90 +771,32 @@ export async function createRescheduleRequest(
 }
 
 /* =========================================================
-   GET CUSTOMER RESCHEDULE REQUESTS
-========================================================= */
-
-export interface RescheduleRequest {
-  id: string
-  booking_reference: string
-
-  old_date: string
-  old_court_id: string
-  old_start_time: string
-  old_end_time: string
-
-  new_date: string
-  new_court_id: string
-  new_start_time: string
-  new_end_time: string
-
-  new_slots: RescheduleSlot[] | null
-
-  status:
-    | 'pending'
-    | 'approved'
-    | 'rejected'
-    | 'cancelled'
-
-  requested_by: string | null
-  reviewed_by: string | null
-  reviewed_at: string | null
-  rejection_reason: string | null
-
-  created_at: string
-  updated_at: string
-}
-
-/**
- * Gets reschedule requests for the currently
- * authenticated customer.
- */
-export async function getMyRescheduleRequests(): Promise<
-  RescheduleRequest[]
-> {
-  const { data, error } = await supabase
-    .from('booking_reschedule_requests')
-    .select('*')
-    .order('created_at', {
-      ascending: false,
-    })
-
-  if (error) {
-    console.error(
-      'Error fetching reschedule requests:',
-      error
-    )
-    throw error
-  }
-
-  return (data ?? []) as RescheduleRequest[]
-}
-
-/* =========================================================
    GET RESCHEDULE REQUEST BY BOOKING
 ========================================================= */
 
 export async function getRescheduleRequestByBooking(
   bookingReference: string
 ): Promise<RescheduleRequest | null> {
-  const reference = bookingReference?.trim()
+  const reference =
+    bookingReference?.trim()
 
   if (!reference) {
     return null
   }
 
-  const { data, error } = await supabase
-    .from('booking_reschedule_requests')
-    .select('*')
-    .eq(
-      'booking_reference',
-      reference
-    )
-    .order('created_at', {
-      ascending: false,
-    })
-    .limit(1)
-    .maybeSingle()
+  const { data, error } =
+    await supabase
+      .from('booking_reschedule_requests')
+      .select('*')
+      .eq(
+        'booking_reference',
+        reference
+      )
+      .order('created_at', {
+        ascending: false,
+      })
+      .limit(1)
+      .maybeSingle()
 
   if (error) {
     console.error(
@@ -874,6 +809,70 @@ export async function getRescheduleRequestByBooking(
   return data as RescheduleRequest | null
 }
 
+/* =========================================================
+   CUSTOMER RESCHEDULE REQUEST
+========================================================= */
+
+/**
+ * Customer-facing single-slot reschedule request.
+ *
+ * Migration 033 enforces:
+ * - confirmed + verified booking
+ * - minimum 24-hour notice
+ * - no pending request
+ * - only one approved customer reschedule
+ *
+ * This function intentionally has a different name from
+ * createRescheduleRequest() because the existing system
+ * already uses that function for multi-slot requests.
+ */
+export async function createCustomerRescheduleRequest(
+  bookingReference: string,
+  newDate: string,
+  newCourtId: string,
+  newStartTime: string,
+  newEndTime: string
+): Promise<void> {
+  const reference =
+    bookingReference?.trim()
+
+  if (!reference) {
+    throw new Error(
+      'Booking reference is required.'
+    )
+  }
+
+  if (
+    !newDate ||
+    !newCourtId ||
+    !newStartTime ||
+    !newEndTime
+  ) {
+    throw new Error(
+      'New booking date, court, and time are required.'
+    )
+  }
+
+  const { error } =
+    await supabase.rpc(
+      'create_reschedule_request',
+      {
+        p_booking_reference: reference,
+        p_new_date: newDate,
+        p_new_court_id: newCourtId,
+        p_new_start_time: newStartTime,
+        p_new_end_time: newEndTime,
+      }
+    )
+
+  if (error) {
+    console.error(
+      'Error creating customer reschedule request:',
+      error
+    )
+    throw error
+  }
+}
 
 /* =========================================================
    GENERATE BOOKING REFERENCE
@@ -895,6 +894,7 @@ export async function generateBookingReference(): Promise<string> {
 
   return data
 }
+
 /* =========================================================
    ADMIN DIRECT RESCHEDULE
 ========================================================= */
@@ -910,7 +910,8 @@ export async function adminRescheduleBooking(
   bookingReference: string,
   newSlots: AdminRescheduleSlot[]
 ): Promise<void> {
-  const reference = bookingReference?.trim()
+  const reference =
+    bookingReference?.trim()
 
   if (!reference) {
     throw new Error(
@@ -924,23 +925,40 @@ export async function adminRescheduleBooking(
     )
   }
 
-  const { error } = await supabase.rpc(
-    'admin_reschedule_booking',
-    {
-      p_booking_reference: reference,
-      p_new_slots: newSlots,
-    }
-  )
+  const { error } =
+    await supabase.rpc(
+      'admin_reschedule_booking',
+      {
+        p_booking_reference: reference,
+        p_new_slots: newSlots,
+      }
+    )
 
   if (error) {
-  console.error('RESCHEDULE RPC ERROR')
-  console.error('message:', error.message)
-  console.error('details:', error.details)
-  console.error('hint:', error.hint)
-  console.error('code:', error.code)
-  console.error('full error:', error)
+    console.error(
+      'RESCHEDULE RPC ERROR'
+    )
+    console.error(
+      'message:',
+      error.message
+    )
+    console.error(
+      'details:',
+      error.details
+    )
+    console.error(
+      'hint:',
+      error.hint
+    )
+    console.error(
+      'code:',
+      error.code
+    )
+    console.error(
+      'full error:',
+      error
+    )
 
-  throw error
-}
-  
+    throw error
+  }
 }
