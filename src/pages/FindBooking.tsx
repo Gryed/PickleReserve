@@ -451,7 +451,7 @@ export default function FindBooking() {
           placeholder={
             searchMode ===
             'reference'
-              ? 'e.g. PR-2026-00002'
+              ? 'e.g. AX-2026-00002'
               : 'Phone number'
           }
           value={query}
