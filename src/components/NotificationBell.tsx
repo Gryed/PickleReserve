@@ -76,9 +76,6 @@ function getNotificationIcon(
     case 'booking_cancelled':
       return '✕'
 
-    case 'booking_rescheduled':
-      return '↻'
-
     case 'booking_reminder':
     case 'upcoming_reservation':
       return '◷'
@@ -272,20 +269,6 @@ export default function NotificationBell({
       case 'booking_cancelled':
         navigate(
           `/admin/reservations?tab=cancelled${
-            encodedReference
-              ? `&reference=${encodedReference}`
-              : ''
-          }`
-        )
-        break
-
-      /* =====================================
-         RESCHEDULED
-      ===================================== */
-
-      case 'booking_rescheduled':
-        navigate(
-          `/admin/reservations?tab=rescheduled${
             encodedReference
               ? `&reference=${encodedReference}`
               : ''

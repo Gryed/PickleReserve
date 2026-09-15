@@ -1,4 +1,4 @@
-```sql
+
 -- ============================================================
 -- 034_reschedule_admin_workflow.sql
 -- PickleReserve - Secure Admin Reschedule Approval Workflow
@@ -588,4 +588,4 @@ grant execute on function
     text
   )
 to authenticated;
-```
+

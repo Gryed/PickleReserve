@@ -7,7 +7,6 @@ export type NotificationType =
   | 'booking_reminder'
   | 'booking_update'
   | 'booking_cancelled'
-  | 'booking_rescheduled'
   | 'new_booking'
   | 'pending_payment'
   | 'upcoming_reservation'
