@@ -53,21 +53,31 @@ export async function updateOperatingHours(
  * Only confirmed reservations block the available slots.
  * Cancelled reservations are intentionally ignored.
  */
+interface PublicReservationSlot {
+  court_id: string
+  booking_date: string
+  start_time: string
+  end_time: string
+  payment_status: 'pending' | 'verified'
+}
+
 export async function getReservationsForCourtAndDate(
   courtId: string,
   date: string
-): Promise<Reservation[]> {
-  const { data, error } = await supabase
-    .from('reservations')
-    .select('*')
-    .eq('court_id', courtId)
-    .eq('date', date)
-    .in('status', ['confirmed'])
-    .in('payment_status', ['pending', 'verified'])
-    .order('start_time', { ascending: true })
+): Promise<PublicReservationSlot[]> {
+  const { data, error } = await supabase.rpc(
+    'get_public_court_availability',
+    {
+      p_court_id: courtId,
+      p_date: date,
+    }
+  )
 
   if (error) {
-    console.error('Error fetching reservations:', error)
+    console.error(
+      'Error fetching public court availability:',
+      error
+    )
     throw error
   }
 
@@ -439,7 +449,7 @@ function minutesToTime(
 function generateTimeSlots(
   openTime: string,
   closeTime: string,
-  existingReservations: Reservation[]
+  existingReservations: PublicReservationSlot[]
 ): TimeSlot[] {
   let openMinutes = timeToMinutes(openTime)
 
@@ -497,9 +507,7 @@ function generateTimeSlots(
             : 'available'
         : 'available',
 
-      bookedByName: reservation
-        ? reservation.guest_name || 'Member'
-        : undefined,
+      bookedByName: undefined,
     })
   }
 
