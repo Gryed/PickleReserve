@@ -61,6 +61,44 @@ interface PublicReservationSlot {
   payment_status: 'pending' | 'verified'
 }
 
+/* =========================================================
+   CREATE RESERVATION
+   ADMIN / EXISTING BOOKING FLOW
+========================================================= */
+
+export async function createReservation(
+  reservation: Omit<Reservation, 'id' | 'created_at'>
+): Promise<Reservation> {
+  const { data, error } = await supabase.rpc(
+    'admin_create_booking',
+    {
+      p_court_id: reservation.court_id,
+      p_user_id: reservation.user_id,
+      p_guest_name: reservation.guest_name,
+      p_guest_phone: reservation.guest_phone,
+      p_date: reservation.date,
+      p_start_time: reservation.start_time,
+      p_end_time: reservation.end_time,
+      p_payment_type: reservation.payment_type,
+      p_amount_due: reservation.amount_due,
+      p_payment_proof_url:
+        reservation.payment_proof_url,
+      p_booking_reference:
+        reservation.booking_reference,
+    }
+  )
+
+  if (error) {
+    console.error(
+      'Error creating admin booking:',
+      error
+    )
+    throw error
+  }
+
+  return data as Reservation
+}
+
 export async function getReservationsForCourtAndDate(
   courtId: string,
   date: string
@@ -82,27 +120,6 @@ export async function getReservationsForCourtAndDate(
   }
 
   return data ?? []
-}
-
-/* =========================================================
-   CREATE RESERVATION
-========================================================= */
-
-export async function createReservation(
-  reservation: Omit<Reservation, 'id' | 'created_at'>
-): Promise<Reservation> {
-  const { data, error } = await supabase
-    .from('reservations')
-    .insert(reservation)
-    .select()
-    .single()
-
-  if (error) {
-    console.error('Error creating reservation:', error)
-    throw error
-  }
-
-  return data
 }
 
 /* =========================================================
@@ -143,73 +160,34 @@ export async function cancelReservation(
 }
 
 /* =========================================================
-   CANCEL ENTIRE BOOKING
+   ADMIN / INTERNAL CANCEL BOOKING
 ========================================================= */
 
 export async function cancelBooking(
-  bookingReference: string | null,
-  reservationId?: string
+  _reservationId: string,
+  bookingReference: string | null
 ): Promise<void> {
-  let query = supabase
-    .from('reservations')
-    .update({
-      status: 'cancelled',
-    })
+  const reference =
+    bookingReference?.trim()
 
-  if (bookingReference) {
-    query = query.eq(
-      'booking_reference',
-      bookingReference
-    )
-  } else if (reservationId) {
-    query = query.eq('id', reservationId)
-  } else {
+  if (!reference) {
     throw new Error(
-      'Booking reference or reservation ID is required.'
+      'Booking reference is required for admin cancellation.'
     )
   }
 
-  const { error } = await query
-
-  if (error) {
-    console.error('Error cancelling booking:', error)
-    throw error
-  }
-}
-
-/* =========================================================
-   UPDATE PAYMENT STATUS FOR ENTIRE BOOKING
-========================================================= */
-
-export async function updateBookingPaymentStatus(
-  bookingReference: string | null,
-  paymentStatus: 'verified' | 'rejected',
-  reservationId?: string
-): Promise<void> {
-  let query = supabase
-    .from('reservations')
-    .update({
-      payment_status: paymentStatus,
-    })
-
-  if (bookingReference) {
-    query = query.eq(
-      'booking_reference',
-      bookingReference
+  const { error } =
+    await supabase.rpc(
+      'admin_cancel_booking',
+      {
+        p_booking_reference:
+          reference,
+      }
     )
-  } else if (reservationId) {
-    query = query.eq('id', reservationId)
-  } else {
-    throw new Error(
-      'Booking reference or reservation ID is required.'
-    )
-  }
-
-  const { error } = await query
 
   if (error) {
     console.error(
-      'Error updating payment status:',
+      `Error cancelling booking ${reference}:`,
       error
     )
     throw error
@@ -668,7 +646,6 @@ function mapPublicBookingLookup(
     guest_phone: row.guest_phone,
     booking_reference: row.booking_reference,
     created_at: '',
-    
   }
 }
 

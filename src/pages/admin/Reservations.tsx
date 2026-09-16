@@ -867,8 +867,8 @@ export default function Reservations() {
 
       if (action === 'cancel') {
         await cancelBooking(
-          booking.booking_reference,
-          booking.firstRow.id
+          booking.firstRow.id,
+          booking.booking_reference ?? '',
         )
       }
 
