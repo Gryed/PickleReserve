@@ -1,4 +1,3 @@
-
 import { supabase } from '../lib/supabase'
 import type {
   Reservation,
@@ -48,10 +47,11 @@ export async function updateOperatingHours(
 ========================================================= */
 
 /**
- * Get confirmed reservations for a specific court/date.
+ * Public reservation slot data.
  *
- * Only confirmed reservations block the available slots.
- * Cancelled reservations are intentionally ignored.
+ * IMPORTANT:
+ * This does NOT expose sensitive reservation fields.
+ * Public availability is retrieved through the secure RPC.
  */
 interface PublicReservationSlot {
   court_id: string
@@ -109,24 +109,37 @@ export async function createReservation(
    CANCEL SINGLE RESERVATION
 ========================================================= */
 
+/**
+ * Customer / guest cancellation.
+ *
+ * Registered customer:
+ * - authorization is handled by cancel_customer_reservation()
+ * - auth.uid() must match reservation.user_id
+ *
+ * Guest:
+ * - guest phone must match reservation.guest_phone
+ *
+ * Cancellation rules are enforced inside the RPC.
+ */
 export async function cancelReservation(
-  reservationId: string
-): Promise<Reservation> {
-  const { data, error } = await supabase
-    .from('reservations')
-    .update({
-      status: 'cancelled',
-    })
-    .eq('id', reservationId)
-    .select()
-    .single()
+  reservationId: string,
+  guestPhone?: string
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    'cancel_customer_reservation',
+    {
+      p_reservation_id: reservationId,
+      p_guest_phone: guestPhone ?? null,
+    }
+  )
 
   if (error) {
-    console.error('Error cancelling reservation:', error)
+    console.error(
+      'Error cancelling reservation:',
+      error
+    )
     throw error
   }
-
-  return data
 }
 
 /* =========================================================
@@ -451,9 +464,11 @@ function generateTimeSlots(
   closeTime: string,
   existingReservations: PublicReservationSlot[]
 ): TimeSlot[] {
-  let openMinutes = timeToMinutes(openTime)
+  let openMinutes =
+    timeToMinutes(openTime)
 
-  let closeMinutes = timeToMinutes(closeTime)
+  let closeMinutes =
+    timeToMinutes(closeTime)
 
   if (
     closeMinutes <= openMinutes &&
@@ -488,10 +503,12 @@ function generateTimeSlots(
       )
 
     const isPending =
-      reservation?.payment_status === 'pending'
+      reservation?.payment_status ===
+      'pending'
 
     const isBooked =
-      reservation?.payment_status === 'verified'
+      reservation?.payment_status ===
+      'verified'
 
     slots.push({
       start_time: startTime,
@@ -611,6 +628,51 @@ export async function getAvailableSlots(
 }
 
 /* =========================================================
+   PUBLIC BOOKING LOOKUP
+========================================================= */
+
+interface PublicBookingLookupRow {
+  id: string
+  court_id: string
+  date: string
+  start_time: string
+  end_time: string
+  status: string
+  payment_type: string
+  amount_due: number | null
+  payment_status: string
+  guest_name: string | null
+  guest_phone: string | null
+  booking_reference: string | null
+  court_name: string | null
+}
+
+function mapPublicBookingLookup(
+  row: PublicBookingLookupRow
+): Reservation {
+  return {
+    id: row.id,
+    court_id: row.court_id,
+    user_id: null,
+    date: row.date,
+    start_time: row.start_time,
+    end_time: row.end_time,
+    status: row.status as Reservation['status'],
+    payment_type:
+      row.payment_type as Reservation['payment_type'],
+    amount_due: row.amount_due,
+    payment_status:
+      row.payment_status as Reservation['payment_status'],
+    payment_proof_url: null,
+    guest_name: row.guest_name,
+    guest_phone: row.guest_phone,
+    booking_reference: row.booking_reference,
+    created_at: '',
+    
+  }
+}
+
+/* =========================================================
    GUEST RESERVATIONS
 ========================================================= */
 
@@ -618,21 +680,12 @@ export async function getGuestReservationsByPhone(
   phone: string
 ): Promise<Reservation[]> {
   const { data, error } =
-    await supabase
-      .from('reservations')
-      .select(`
-        *,
-        courts (
-          name
-        )
-      `)
-      .eq('guest_phone', phone)
-      .order('date', {
-        ascending: false,
-      })
-      .order('start_time', {
-        ascending: true,
-      })
+    await supabase.rpc(
+      'get_public_booking_by_phone',
+      {
+        p_guest_phone: phone,
+      }
+    )
 
   if (error) {
     console.error(
@@ -642,7 +695,9 @@ export async function getGuestReservationsByPhone(
     throw error
   }
 
-  return data ?? []
+  return (
+    (data ?? []) as PublicBookingLookupRow[]
+  ).map(mapPublicBookingLookup)
 }
 
 /* =========================================================
@@ -653,24 +708,12 @@ export async function getReservationsByReference(
   reference: string
 ): Promise<Reservation[]> {
   const { data, error } =
-    await supabase
-      .from('reservations')
-      .select(`
-        *,
-        courts (
-          name
-        )
-      `)
-      .eq(
-        'booking_reference',
-        reference
-      )
-      .order('date', {
-        ascending: false,
-      })
-      .order('start_time', {
-        ascending: true,
-      })
+    await supabase.rpc(
+      'get_public_booking_by_reference',
+      {
+        p_booking_reference: reference,
+      }
+    )
 
   if (error) {
     console.error(
@@ -680,7 +723,9 @@ export async function getReservationsByReference(
     throw error
   }
 
-  return data ?? []
+  return (
+    (data ?? []) as PublicBookingLookupRow[]
+  ).map(mapPublicBookingLookup)
 }
 
 /* =========================================================

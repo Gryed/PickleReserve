@@ -349,8 +349,11 @@ export default function FindBooking() {
 
     try {
       await cancelReservation(
-        reservationId
-      )
+  reservationId,
+  searchMode === 'phone'
+    ? query.trim()
+    : undefined
+)
 
       await refreshResults()
     } catch (err) {
