@@ -57,7 +57,21 @@ export async function getOpenPlaySession(
 
   return data[0] as OpenPlaySessionPublic
 }
+// ADMIN — SESSION LIST
+export async function getAdminOpenPlaySessions(): Promise<OpenPlaySession[]> {
+  const { data, error } = await supabase
+    .from('open_play_sessions')
+    .select('*')
+    .order('session_date', { ascending: true })
+    .order('start_time', { ascending: true })
 
+  if (error) {
+    console.error('Error fetching admin Open Play sessions:', error)
+    throw error
+  }
+
+  return (data ?? []) as OpenPlaySession[]
+}
 // ============================================================
 // ADMIN — SESSION MANAGEMENT
 // ============================================================
