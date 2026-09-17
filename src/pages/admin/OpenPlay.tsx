@@ -764,7 +764,7 @@ export default function OpenPlay() {
                 +
               </span>
 
-              Create Session
+              Create Open Play
             </button>
           </div>
         </section>

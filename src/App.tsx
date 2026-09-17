@@ -18,7 +18,9 @@ import PendingPayments from './pages/admin/PendingPayments'
 import Reservations from './pages/admin/Reservations'
 import Reports from './pages/admin/Reports'
 import CreateBooking from './pages/admin/CreateBooking'
-import OpenPlay from './pages/admin/OpenPlay'
+import OpenPlay from './pages/OpenPlay'
+import AdminOpenPlay from './pages/admin/OpenPlay'
+import OpenPlayDetails from './pages/OpenPlayDetails'
 
 function PublicLayout({
   children,
@@ -192,6 +194,51 @@ function App() {
           }
         />
 
+                {/* =========================
+            ADMIN OPEN PLAY
+        ========================== */}
+
+        <Route
+          path="/admin/open-play"
+          element={
+            <ProtectedRoute>
+              <AdminLayout>
+                <AdminOpenPlay />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================
+            PUBLIC OPEN PLAY
+        ========================== */}
+
+        <Route
+          path="/open-play"
+          element={
+            <PublicLayout>
+              <OpenPlay />
+            </PublicLayout>
+          }
+        />
+
+        <Route
+  path="/open-play"
+  element={
+    <PublicLayout>
+      <OpenPlay />
+    </PublicLayout>
+  }
+/>
+
+<Route
+  path="/open-play/:sessionId"
+  element={
+    <PublicLayout>
+      <OpenPlayDetails />
+    </PublicLayout>
+  }
+/>
         {/* =========================
             404
         ========================== */}
@@ -204,16 +251,7 @@ function App() {
             </div>
           }
         />
-        <Route
-  path="/admin/open-play"
-  element={
-    <ProtectedRoute>
-      <AdminLayout>
-        <OpenPlay />
-      </AdminLayout>
-    </ProtectedRoute>
-  }
-/>
+
       </Routes>
     </BrowserRouter>
   )
