@@ -18,6 +18,7 @@ import PendingPayments from './pages/admin/PendingPayments'
 import Reservations from './pages/admin/Reservations'
 import Reports from './pages/admin/Reports'
 import CreateBooking from './pages/admin/CreateBooking'
+import OpenPlay from './pages/admin/OpenPlay'
 
 function PublicLayout({
   children,
@@ -203,6 +204,16 @@ function App() {
             </div>
           }
         />
+        <Route
+  path="/admin/open-play"
+  element={
+    <ProtectedRoute>
+      <AdminLayout>
+        <OpenPlay />
+      </AdminLayout>
+    </ProtectedRoute>
+  }
+/>
       </Routes>
     </BrowserRouter>
   )
